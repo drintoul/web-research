@@ -4,11 +4,17 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Web Research Endpoint Tester</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48Y2lyY2xlIGN4PSI0MiIgY3k9IjQyIiByPSIyOCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMjU2M2ViIiBzdHJva2Utd2lkdGg9IjEwIi8+PGxpbmUgeDE9IjYyIiB5MT0iNjIiIHgyPSI5MCIgeTI9IjkwIiBzdHJva2U9IiMyNTYzZWIiIHN0cm9rZS13aWR0aD0iMTAiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjwvc3ZnPg==" />
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    .tab-active { border-bottom: 2px solid #2563eb; color: #2563eb; }
-    .subtab-active { background-color: #dbeafe; color: #1e40af; }
+    .tab-active { background-color: #2563eb; color: #ffffff; border-radius: 0.25rem; font-weight: 600; }
+    .subtab-active { background-color: #2563eb; color: #ffffff; border-radius: 0.25rem; font-weight: 600; }
     pre { white-space: pre-wrap; word-break: break-word; }
+    html { font-size: 110%; }
+    details > summary { list-style: none; }
+    details > summary::-webkit-details-marker { display: none; }
+    textarea { resize: none !important; }
+    input, select, textarea { background-color: #f8fafc; }
   </style>
   <script>
     window.GATEWAY_API_KEY = "__GATEWAY_API_KEY__";
@@ -17,13 +23,24 @@
 <body class="h-full bg-slate-50 text-slate-800">
   <div class="min-h-full p-6">
     <header class="max-w-6xl mx-auto mb-6">
-      <h1 class="text-2xl font-bold mb-2">Web Research Endpoint Tester</h1>
-      <div class="flex items-center gap-4">
-        <span class="text-sm text-slate-600">API Key loaded from server</span>
-        <input id="api-key" type="hidden" value="__GATEWAY_API_KEY__" />
+      <h1 class="text-3xl font-bold mb-2">Web Research Endpoint Tester</h1>
+      <p class="text-sm text-slate-600 max-w-3xl">A self-hosted web research platform with a unified set of REST and MCP endpoints for search, discovery, scraping, crawling, structured extraction, and browser interaction. This UI lets you exercise every endpoint, manage sessions, and pipe results from one call to the next.</p>
+      <div class="mt-3 flex flex-wrap items-center gap-2 text-sm">
+        <span class="px-3 py-1 rounded bg-blue-50 border border-blue-100 text-slate-700">
+          <span class="font-semibold text-slate-500">REST API: </span>
+          <span class="font-mono font-semibold text-slate-800 ml-1">http://127.0.0.1:8084</span>
+        </span>
+        <span class="px-3 py-1 rounded bg-slate-100 border border-slate-200 text-slate-700">
+          <span class="font-semibold text-slate-500">MCP Server: </span>
+          <span class="font-mono font-semibold text-slate-800 ml-1">http://127.0.0.1:8083/mcp</span>
+        </span>
       </div>
-      <div id="health-indicators" class="mt-3 flex flex-wrap items-center gap-3 text-sm">
-        <span class="text-slate-500">Checking health...</span>
+      <input id="api-key" type="hidden" value="__GATEWAY_API_KEY__" />
+      <div class="mt-3 flex flex-wrap items-center gap-3 text-sm">
+        <span class="font-medium text-slate-600">Service Status:</span>
+        <div id="health-indicators" class="flex flex-wrap items-center gap-3">
+          <span class="text-slate-500">Checking health...</span>
+        </div>
       </div>
     </header>
 
@@ -33,20 +50,40 @@
       <!-- Scrape -->
       <section id="tab-scrape" class="tab-content hidden">
         <div class="mb-2 text-sm text-slate-500">POST <span class="font-mono">/v1/scrape</span></div>
-        <label class="block text-sm font-medium mb-1">JSON body</label>
-        <textarea id="scrape-body" rows="6" class="w-full border rounded p-2 font-mono text-sm">{
-  "url": "https://www.princess.com",
-  "formats": ["markdown"]
-}</textarea>
-        <div class="flex items-center gap-2 mt-2">
-          <button onclick="sendPost('/v1/scrape','scrape-body','scrape-out')" class="bg-blue-600 text-white px-4 py-2 rounded">Send</button>
-          <span class="text-xs text-slate-500">Step 1: send the scrape request</span>
+        <div>
+          <label class="block text-sm font-medium mb-1">URL</label>
+          <input id="scrape-url" type="text" class="w-full border rounded px-3 py-1 font-mono text-sm" value="https://www.princess.com" />
         </div>
-        <div class="mt-2 flex flex-wrap gap-2">
-          <button onclick="loadExample('scrape-body', {url: sampleUrl(), formats: ['markdown']})" class="text-sm text-blue-600 underline py-2">Markdown</button>
-          <button onclick="loadExample('scrape-body', {url: sampleUrl(), formats: ['markdown', 'links', 'screenshot']})" class="text-sm text-blue-600 underline py-2">Markdown + links + screenshot</button>
-          <button onclick="loadExample('scrape-body', {url: sampleUrl(), formats: ['product', 'markdown']})" class="text-sm text-blue-600 underline py-2">Product page</button>
-          <button onclick="loadExample('scrape-body', {url: sampleUrl(), formats: ['markdown'], headers: {'Accept-Language': 'en-US,en;q=0.9'}})" class="text-sm text-blue-600 underline py-2">Custom headers</button>
+        <div class="mt-2">
+          <label class="block text-sm font-medium mb-1">Formats <span class="font-normal text-slate-500">(Ctrl/Cmd to select multiple)</span></label>
+          <select id="scrape-formats" multiple size="7" class="w-full border rounded p-2 font-mono text-sm md:w-1/2">
+            <option value="markdown" selected>markdown</option>
+            <option value="html">html</option>
+            <option value="links">links</option>
+            <option value="screenshot">screenshot</option>
+            <option value="json">json</option>
+            <option value="product">product</option>
+            <option value="extract">extract</option>
+          </select>
+        </div>
+        <div class="mt-2 flex items-center gap-4">
+          <label class="text-sm text-slate-600 flex items-center gap-1">
+            <input type="checkbox" id="scrape-only-main" class="rounded" /> onlyMainContent
+          </label>
+        </div>
+        <div class="mt-2">
+          <label class="block text-sm font-medium mb-1">Advanced options <span class="font-normal text-slate-500">(JSON, optional)</span></label>
+          <textarea id="scrape-advanced" rows="4" class="w-full border rounded p-2 font-mono text-sm" placeholder='{ "timeout": 30000, "headers": {"Accept-Language": "en-US"}, "mobile": false, "includeTags": ["#content"], "excludeTags": ["nav"], "waitFor": 1000 }'></textarea>
+          <p class="text-xs text-slate-500 mt-1">Common keys: <code>timeout</code>, <code>headers</code>, <code>includeTags</code>, <code>excludeTags</code>, <code>mobile</code>, <code>skipTlsVerification</code>, <code>waitFor</code>, <code>extract</code> (for the extract schema).</p>
+        </div>
+        <div class="mt-2">
+          <label class="block text-sm font-medium mb-1">JSON body</label>
+          <textarea id="scrape-body" rows="10" class="w-full border rounded p-2 font-mono text-sm"></textarea>
+        </div>
+        <div class="mt-2 flex items-center gap-2">
+          <button onclick="buildScrapeRequest()" class="bg-emerald-600 text-white px-4 py-2 rounded">Build request</button>
+          <button onclick="sendPost('/v1/scrape','scrape-body','scrape-out')" class="bg-blue-600 text-white px-4 py-2 rounded">Submit</button>
+          <span class="text-xs text-slate-500">Build the request (you can edit the JSON body before sending)</span>
         </div>
         <pre id="scrape-out" class="mt-4 p-3 bg-slate-100 rounded text-sm"></pre>
       </section>
@@ -54,19 +91,31 @@
       <!-- Map -->
       <section id="tab-map" class="tab-content hidden">
         <div class="mb-2 text-sm text-slate-500">POST <span class="font-mono">/v1/map</span></div>
-        <label class="block text-sm font-medium mb-1">JSON body</label>
-        <textarea id="map-body" rows="6" class="w-full border rounded p-2 font-mono text-sm">{
-  "url": "https://www.princess.com",
-  "limit": 10
-}</textarea>
-        <div class="flex items-center gap-2 mt-2">
-          <button onclick="sendPost('/v1/map','map-body','map-out')" class="bg-blue-600 text-white px-4 py-2 rounded">Send</button>
-          <span class="text-xs text-slate-500">Step 1: send the map request</span>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <div>
+            <label class="block text-sm font-medium mb-1">URL <span class="font-normal text-slate-500">— site to map</span></label>
+            <input id="map-url" type="text" class="w-full border rounded px-3 py-1 font-mono text-sm" value="https://www.princess.com" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Limit <span class="font-normal text-slate-500">— number of links</span></label>
+            <input id="map-limit" type="number" class="w-full border rounded px-3 py-1 font-mono text-sm" value="10" min="1" max="100" />
+          </div>
         </div>
-        <div class="mt-2 flex flex-wrap gap-2">
-          <button onclick="loadExample('map-body', {url: sampleUrl(), limit: 50})" class="text-sm text-blue-600 underline py-2">Basic map</button>
-          <button onclick="loadExample('map-body', {url: sampleUrl(), limit: 100, sitemapOnly: true, includeSubdomains: false})" class="text-sm text-blue-600 underline py-2">Sitemap only</button>
-          <button onclick="loadExample('map-body', {url: sampleUrl(), limit: 50, search: 'Alaska cruise'})" class="text-sm text-blue-600 underline py-2">Topic search</button>
+        <div class="mt-2">
+          <label class="block text-sm font-medium mb-1">Advanced options <span class="font-normal text-slate-500">(JSON, optional)</span></label>
+          <textarea id="map-advanced" rows="2" class="w-full border rounded p-2 font-mono text-sm" placeholder='{ "sitemapOnly": false, "includeSubdomains": true }'></textarea>
+        </div>
+        <div class="mt-2 flex items-center gap-2">
+          <button onclick="buildMapRequest()" class="bg-emerald-600 text-white px-4 py-2 rounded">Build request</button>
+          <span class="text-xs text-slate-500">Step 1: build the JSON body from the controls (you can edit it before sending)</span>
+        </div>
+        <div class="mt-2">
+          <label class="block text-sm font-medium mb-1">JSON body</label>
+          <textarea id="map-body" rows="6" class="w-full border rounded p-2 font-mono text-sm"></textarea>
+        </div>
+        <div class="mt-2 flex items-center gap-2">
+          <button onclick="sendPost('/v1/map','map-body','map-out')" class="bg-blue-600 text-white px-4 py-2 rounded">Submit</button>
+          <span class="text-xs text-slate-500">Step 2: submit the built request</span>
         </div>
         <pre id="map-out" class="mt-4 p-3 bg-slate-100 rounded text-sm"></pre>
       </section>
@@ -103,19 +152,59 @@
       <!-- Search -->
       <section id="tab-search" class="tab-content hidden">
         <div class="mb-2 text-sm text-slate-500">POST <span class="font-mono">/v1/search</span></div>
-        <label class="block text-sm font-medium mb-1">JSON body</label>
-        <textarea id="search-body" rows="5" class="w-full border rounded p-2 font-mono text-sm">{
-  "query": "example domain",
-  "limit": 3
-}</textarea>
-        <div class="flex items-center gap-2 mt-2">
-          <button onclick="sendPost('/v1/search','search-body','search-out')" class="bg-blue-600 text-white px-4 py-2 rounded">Send</button>
-          <span class="text-xs text-slate-500">Step 1: send the search request</span>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <div>
+            <label class="block text-sm font-medium mb-1">Query <span class="font-normal text-slate-500">— main search terms</span></label>
+            <input id="search-query" type="text" class="w-full border rounded px-3 py-1 font-mono text-sm" value="Renaissace Faires in Canada" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Limit <span class="font-normal text-slate-500">— number of results</span></label>
+            <input id="search-limit" type="number" class="w-full border rounded px-3 py-1 font-mono text-sm" value="3" min="1" max="50" />
+          </div>
         </div>
-        <div class="mt-2 flex flex-wrap gap-2">
-          <button onclick="loadExample('search-body', {query: 'example domain', limit: 3})" class="text-sm text-blue-600 underline py-2">Simple search</button>
-          <button onclick="loadExample('search-body', {query: 'Royal Caribbean Alaska 2027', limit: 5, scrapeOptions: {formats: ['markdown'], onlyMainContent: true}})" class="text-sm text-blue-600 underline py-2">Read results as markdown</button>
-          <button onclick="loadExample('search-body', {query: 'NVIDIA stock news', limit: 5, tbs: 'qdr:d', scrapeOptions: {formats: ['markdown'], onlyMainContent: true}})" class="text-sm text-blue-600 underline py-2">Recent news</button>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+          <div>
+            <label class="block text-sm font-medium mb-1">Include terms <span class="font-normal text-slate-500">— appended to query</span></label>
+            <input id="search-include" type="text" class="w-full border rounded px-3 py-1 font-mono text-sm" placeholder="Alaska 2027" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Exclude terms <span class="font-normal text-slate-500">— negated and appended</span></label>
+            <input id="search-exclude" type="text" class="w-full border rounded px-3 py-1 font-mono text-sm" placeholder='wikipedia "united states"' />
+          </div>
+        </div>
+        <p class="text-xs text-slate-500 mt-1">Tip: wrap multi-word phrases in quotes (e.g. "Alaska 2027" or "united states").</p>
+        <p class="text-xs text-slate-600 mt-2">Search is not the same as the Scrape endpoint, but you can still get a markdown snapshot of each result page (or a portion of it) in a single API call.</p>
+        <div class="mt-2 flex items-center gap-4">
+          <label class="text-sm text-slate-600 flex items-center gap-1">
+            <input type="checkbox" id="search-scrape" class="rounded" /> Scrape result pages as markdown
+          </label>
+        </div>
+        <details class="mt-2 border rounded p-2 bg-white group">
+          <summary class="text-sm font-medium text-slate-700 cursor-pointer select-none list-none flex items-center gap-2">
+            <span class="text-slate-500 group-open:rotate-90 transition-transform">▶</span>
+            Advanced options <span class="font-normal text-slate-500">(JSON, optional; controls above take precedence)</span>
+          </summary>
+          <div class="mt-2">
+            <textarea id="search-advanced" rows="3" class="w-full border rounded p-2 font-mono text-sm" placeholder='{ "scrapeOptions": {"formats": ["markdown", "links"], "onlyMainContent": true} }'></textarea>
+          </div>
+          <p class="text-xs text-slate-500 mt-1">Common <code>scrapeOptions</code> keys: <code>formats</code>, <code>onlyMainContent</code>, <code>includeTags</code>, <code>excludeTags</code>, <code>timeout</code>, <code>headers</code>, <code>waitFor</code>, <code>mobile</code>.</p>
+        </details>
+        <div class="mt-2 flex items-center gap-2">
+          <button onclick="buildSearchRequest()" class="bg-emerald-600 text-white px-4 py-2 rounded">Build request</button>
+          <span class="text-xs text-slate-500">Step 1: build the JSON body from the controls (you can edit it before sending)</span>
+        </div>
+        <div class="mt-2">
+          <label class="block text-sm font-medium mb-1">JSON body</label>
+          <textarea id="search-body" rows="10" class="w-full border rounded p-2 font-mono text-sm"></textarea>
+        </div>
+        <div class="mt-2 flex items-center gap-2">
+          <button onclick="sendPost('/v1/search','search-body','search-out')" class="bg-blue-600 text-white px-4 py-2 rounded">Submit</button>
+          <span class="text-xs text-slate-500">Step 2: submit the built request</span>
+        </div>
+        <div class="mt-2 flex items-center gap-2">
+          <label class="text-sm text-slate-600 flex items-center gap-1">
+            <input type="checkbox" id="pretty-print" checked /> Pretty print JSON results
+          </label>
         </div>
         <pre id="search-out" class="mt-4 p-3 bg-slate-100 rounded text-sm"></pre>
       </section>
@@ -149,7 +238,7 @@
   }
 }</textarea>
         <div class="mt-2 flex flex-wrap gap-2">
-          <button onclick="sendPost('/v1/extract','extract-body','extract-out')" class="bg-blue-600 text-white px-4 py-2 rounded">Send</button>
+          <button onclick="sendPost('/v1/extract','extract-body','extract-out')" class="bg-blue-600 text-white px-4 py-2 rounded">Submit</button>
           <button onclick="loadExample('extract-body', {url: sampleUrl(), instruction: 'Extract the page title.', schema: {type: 'object', properties: {title: {type: 'string'}}, required: ['title']}})" class="text-sm text-blue-600 underline py-2">Simple URL</button>
           <button onclick="loadExample('extract-body', {url: sampleUrl(), instruction: 'Extract the page title, a one-sentence summary, and the main topic.', schema: {type: 'object', properties: {title: {type: 'string'}, summary: {type: 'string'}, topic: {type: 'string'}}, required: ['title','summary','topic']}})" class="text-sm text-blue-600 underline py-2">Complex schema</button>
           <button onclick="loadExample('extract-body', {url: sampleUrl(), instruction: 'Extract product details: name, price, rating, and whether it is in stock.', schema: {type: 'object', properties: {name: {type: 'string'}, price: {type: 'string'}, rating: {type: 'string'}, in_stock: {type: 'boolean'}}, required: ['name','price','rating','in_stock']}})" class="text-sm text-blue-600 underline py-2">Product page</button>
@@ -347,7 +436,7 @@
         </div>
         <div class="mt-2 flex items-center gap-2">
           <button onclick="buildMcpToolCall()" class="bg-emerald-600 text-white px-4 py-2 rounded">Build call</button>
-          <button onclick="sendMcp()" class="bg-blue-600 text-white px-4 py-2 rounded">Send</button>
+          <button onclick="sendMcp()" class="bg-blue-600 text-white px-4 py-2 rounded">Submit</button>
           <span id="mcp-step-hint" class="text-xs text-slate-500">Step 1: send Initialize to get a session id</span>
         </div>
         <div class="mt-2 flex flex-wrap gap-2">
@@ -380,10 +469,10 @@
     function sampleUrl() { return SAMPLE_URLS[Math.floor(Math.random() * SAMPLE_URLS.length)]; }
 
     const mainTabs = [
-      { id: 'scrape', label: 'Scrape' },
-      { id: 'map', label: 'Map' },
-      { id: 'crawl', label: 'Crawl' },
       { id: 'search', label: 'Search' },
+      { id: 'map', label: 'Map' },
+      { id: 'scrape', label: 'Scrape' },
+      { id: 'crawl', label: 'Crawl' },
       { id: 'extract', label: 'Extract' },
       { id: 'interact', label: 'Interact' },
       { id: 'mcp', label: 'MCP' },
@@ -397,7 +486,7 @@
       { id: 'plan', label: 'Plan' },
       { id: 'close', label: 'Close' },
     ];
-    let currentTab = 'scrape';
+    let currentTab = 'search';
     let mcpLastData = null;
     let mcpStep = 0;
 
@@ -433,7 +522,7 @@
     function buildTabs() {
       const nav = document.getElementById('main-tabs');
       nav.innerHTML = mainTabs.map(t =>
-        `<button id="btn-${t.id}" class="px-4 py-2 whitespace-nowrap ${t.id === currentTab ? 'tab-active' : 'text-slate-500'}" onclick="showTab('${t.id}')">${t.label}</button>`
+        `<button id="btn-${t.id}" class="px-4 py-2 whitespace-nowrap font-medium transition ${t.id === currentTab ? 'tab-active' : 'text-slate-700 hover:text-slate-900'}" onclick="showTab('${t.id}')">${t.label}</button>`
       ).join('');
 
       const iNav = document.getElementById('interact-tabs');
@@ -445,10 +534,12 @@
     }
 
     function showTab(id) {
-      currentTab = id;
       document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
       document.getElementById('tab-' + id).classList.remove('hidden');
+      currentTab = id;
       buildTabs();
+      const section = document.getElementById('tab-' + id);
+      if (section) section.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     function showInteract(id) {
@@ -463,6 +554,7 @@
 
     function apiKey() { return window.GATEWAY_API_KEY || document.getElementById('api-key').value; }
     function url(path) { return window.location.origin + path; }
+    function prettyEnabled() { return document.getElementById('pretty-print')?.checked ?? true; }
     function sid(inputId) { return document.getElementById(inputId).value.trim(); }
 
     let __sid__ = '';
@@ -544,7 +636,7 @@
           body = '[binary PNG data]';
         } else if (contentType.includes('application/json')) {
           const j = await res.json();
-          body = JSON.stringify(j, null, 2);
+          body = prettyEnabled() ? JSON.stringify(j, null, 2) : JSON.stringify(j);
         } else {
           body = await res.text();
         }
@@ -576,12 +668,69 @@
       const body = document.getElementById(bodyId).value;
       handle(path, {
         method: 'POST',
-        headers: {
-          'Authorization': 'Bearer ' + apiKey(),
-          'Content-Type': 'application/json'
-        },
-        body: body
+        headers: { 'Authorization': 'Bearer ' + apiKey(), 'Content-Type': 'application/json' },
+        body
       }, outId);
+    }
+
+    function buildScrapeRequest() {
+      const url = document.getElementById('scrape-url').value.trim() || sampleUrl();
+      const selected = Array.from(document.getElementById('scrape-formats').selectedOptions).map(o => o.value);
+      const onlyMain = document.getElementById('scrape-only-main').checked;
+      const advanced = document.getElementById('scrape-advanced').value.trim();
+      let extra = {};
+      if (advanced) {
+        try { extra = JSON.parse(advanced); }
+        catch (e) { document.getElementById('scrape-out').textContent = 'Invalid advanced options JSON: ' + e.message; return; }
+      }
+      const body = { ...extra, url };
+      if (selected.length) body.formats = selected;
+      if (onlyMain) body.onlyMainContent = true;
+      const scrapeBody = document.getElementById('scrape-body');
+      const scrapeBodyText = JSON.stringify(body, null, 2);
+      scrapeBody.value = scrapeBodyText;
+      scrapeBody.rows = Math.max(6, scrapeBodyText.split('\n').length);
+    }
+
+    function buildSearchRequest() {
+      let query = document.getElementById('search-query').value.trim() || 'example domain';
+      const include = document.getElementById('search-include').value.trim();
+      const exclude = document.getElementById('search-exclude').value.trim();
+      if (include) query += ' ' + include;
+      if (exclude) {
+        const excludeTokens = exclude.match(/"(?:\\"|[^"])*"|\S+/g) || [];
+        query += ' ' + excludeTokens.map(t => '-' + t).join(' ');
+      }
+      const limit = parseInt(document.getElementById('search-limit').value, 10) || 3;
+      const scrape = document.getElementById('search-scrape').checked;
+      const advanced = document.getElementById('search-advanced').value.trim();
+      let extra = {};
+      if (advanced) {
+        try { extra = JSON.parse(advanced); }
+        catch (e) { document.getElementById('search-out').textContent = 'Invalid advanced options JSON: ' + e.message; return; }
+      }
+      const body = { ...extra, query, limit };
+      if (scrape) body.scrapeOptions = { formats: ['markdown'], onlyMainContent: true };
+      const searchBody = document.getElementById('search-body');
+      const bodyText = JSON.stringify(body, null, 2);
+      searchBody.value = bodyText;
+      searchBody.rows = Math.max(6, bodyText.split('\n').length);
+    }
+
+    function buildMapRequest() {
+      const mapUrl = document.getElementById('map-url').value.trim() || sampleUrl();
+      const limit = parseInt(document.getElementById('map-limit').value, 10) || 10;
+      const advanced = document.getElementById('map-advanced').value.trim();
+      let extra = {};
+      if (advanced) {
+        try { extra = JSON.parse(advanced); }
+        catch (e) { document.getElementById('map-out').textContent = 'Invalid advanced options JSON: ' + e.message; return; }
+      }
+      const body = { ...extra, url: mapUrl, limit };
+      const mapBody = document.getElementById('map-body');
+      const mapBodyText = JSON.stringify(body, null, 2);
+      mapBody.value = mapBodyText;
+      mapBody.rows = Math.max(6, mapBodyText.split('\n').length);
     }
 
     function sendPostDyn(path, bodyId, outId) {
@@ -981,9 +1130,11 @@
         }
         const data = await res.json();
         const services = data.services || {};
+        const displayNames = { extract: 'Extract/LLM', interact: 'Interact/Playwright', firecrawl: 'Firecrawl', gateway: 'Gateway' };
         const html = Object.entries(services).map(([name, ok]) => {
           const color = ok ? 'bg-emerald-500' : 'bg-red-500';
-          return `<span class="flex items-center gap-1" title="${name}: ${ok ? 'ok' : 'down'}"><span class="inline-block w-2 h-2 rounded-full ${color}"></span><span class="capitalize">${name}</span></span>`;
+          const display = displayNames[name] || name;
+          return `<span class="flex items-center gap-1" title="${display}: ${ok ? 'ok' : 'down'}"><span class="inline-block w-2 h-2 rounded-full ${color}"></span><span>${display}</span></span>`;
         }).join('');
         container.innerHTML = html || '<span class="text-slate-500">No services</span>';
       } catch (e) {
@@ -1075,7 +1226,10 @@
         catch (e) { document.getElementById('mcp-out').textContent = 'Invalid parameters JSON: ' + e.message; return; }
       }
       const body = { jsonrpc: '2.0', id: Date.now(), method: 'tools/call', params: { name, arguments: args } };
-      document.getElementById('mcp-body').value = JSON.stringify(body, null, 2);
+      const mcpBody = document.getElementById('mcp-body');
+      const mcpBodyText = JSON.stringify(body, null, 2);
+      mcpBody.value = mcpBodyText;
+      mcpBody.rows = Math.max(6, mcpBodyText.split('\n').length);
       document.getElementById('mcp-step-hint').textContent = 'Step 3: review the JSON-RPC body and click Send';
     }
 
@@ -1148,7 +1302,10 @@
     setInterval(pollHealth, 5000);
 
     buildTabs();
-    showTab('scrape');
+    showTab('search');
+    buildSearchRequest();
+    buildScrapeRequest();
+    buildMapRequest();
     showInteract('create');
     updateMcpStatus();
     updateMcpButtons();

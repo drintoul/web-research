@@ -55,6 +55,7 @@ async def health():
     checks = {}
     async with httpx.AsyncClient(timeout=5) as client:
         for name, url in {
+            "firecrawl": f"{FIRECRAWL}/",
             "extract": f"{EXTRACT}/health",
             "interact": f"{INTERACT}/health",
         }.items():

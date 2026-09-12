@@ -18,6 +18,15 @@ The stack deliberately combines several specialized services rather than trying 
 
 > **Important:** this Compose project does **not** start Ollama or SearXNG. It is designed to reuse the Ollama and SearXNG instances you already run separately.
 
+## Why did I build this?
+
+The self-hosted version of Firecrawl provides excellent search, map, scrape, and crawl endpoints, but it does **not** support the `extract` or `interact` features that the cloud-hosted (paid) service offers. I wanted both capabilities without depending on a SaaS bill, so I added two dedicated services:
+
+- **Extract:** a FastAPI service that calls my existing Ollama endpoint and validates the response against a caller-supplied JSON Schema, with bounded retry on invalid output.
+- **Interact:** a Playwright browser-automation service for stateful navigation, clicking, typing, selecting, scrolling, reading text, and capturing screenshots.
+
+I then wanted a single, stable API contract rather than maintaining two separate stacks, so the gateway exposes everything as **REST**, and the **MCP** server is a thin, stateful wrapper that routes the same calls through the same gateway. This means any improvement, bug fix, or new endpoint only needs to be added once.
+
 ## Architecture
 
 ```mermaid
