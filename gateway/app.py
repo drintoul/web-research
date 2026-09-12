@@ -3,6 +3,7 @@ from typing import Any
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field, model_validator
 
 from common.http import OptionalApiKeyMiddleware, RequestContextMiddleware
@@ -13,6 +14,7 @@ configure_logging("gateway")
 FIRECRAWL = os.getenv("FIRECRAWL_BASE_URL", "http://firecrawl-api:3002").rstrip("/")
 EXTRACT = os.getenv("EXTRACT_BASE_URL", "http://extract:8090").rstrip("/")
 INTERACT = os.getenv("INTERACT_BASE_URL", "http://interact:8091").rstrip("/")
+MCP = os.getenv("MCP_BASE_URL", "http://mcp:8081").rstrip("/")
 TIMEOUT = float(os.getenv("SERVICE_TIMEOUT_SECONDS", "180"))
 
 app = FastAPI(title="Web Research Stack Gateway", version="0.1.0")
@@ -99,7 +101,7 @@ async def extract(req: ExtractGatewayRequest, request: Request):
             "POST",
             f"{FIRECRAWL}/v2/scrape",
             request,
-            {"url": req.url, "formats": ["markdown"]},
+            {"url": req.url, "formats": ["markdown"], "onlyMainContent": True},
         )
         data = scraped.get("data", scraped)
         content = data.get("markdown") or data.get("content")
@@ -152,3 +154,101 @@ async def screenshot(session_id: str, request: Request):
     if r.is_error:
         raise HTTPException(r.status_code, r.text[:2000])
     return Response(content=r.content, media_type=r.headers.get("content-type", "image/png"))
+
+
+@app.get("/v1/interact/sessions/{session_id}/elements")
+async def elements(session_id: str, request: Request):
+    return await _json_proxy("GET", f"{INTERACT}/v1/sessions/{session_id}/elements", request)
+
+
+@app.post("/v1/extract/schema-suggest")
+async def extract_schema_suggest(payload: dict[str, Any], request: Request):
+    url = payload.get("url")
+    content = payload.get("content")
+
+    if not content and url:
+        scraped = await _json_proxy(
+            "POST",
+            f"{FIRECRAWL}/v2/scrape",
+            request,
+            {"url": url, "formats": ["markdown"], "onlyMainContent": True},
+        )
+        data = scraped.get("data", scraped)
+        content = data.get("markdown") or data.get("content")
+        if not content:
+            raise HTTPException(502, "Firecrawl returned no extractable markdown/content")
+
+    forward = {
+        "content": content,
+        "instruction": payload.get("instruction", ""),
+    }
+    if payload.get("model"):
+        forward["model"] = payload["model"]
+    return await _json_proxy("POST", f"{EXTRACT}/v1/schema-suggest", request, forward)
+
+
+@app.post("/v1/extract/instruction-suggest")
+async def extract_instruction_suggest(payload: dict[str, Any], request: Request):
+    url = payload.get("url")
+    content = payload.get("content")
+
+    if not content and url:
+        scraped = await _json_proxy(
+            "POST",
+            f"{FIRECRAWL}/v2/scrape",
+            request,
+            {"url": url, "formats": ["markdown"], "onlyMainContent": True},
+        )
+        data = scraped.get("data", scraped)
+        content = data.get("markdown") or data.get("content")
+        if not content:
+            raise HTTPException(502, "Firecrawl returned no extractable markdown/content")
+
+    forward = {"content": content}
+    if payload.get("model"):
+        forward["model"] = payload["model"]
+    return await _json_proxy("POST", f"{EXTRACT}/v1/instruction-suggest", request, forward)
+
+
+_UI_HTML: str | None = None
+
+
+def _get_ui_html() -> str:
+    global _UI_HTML
+    if _UI_HTML is None:
+        ui_path = os.path.join(os.path.dirname(__file__), "..", "ui", "index.html")
+        with open(ui_path, "r") as f:
+            _UI_HTML = f.read()
+    return _UI_HTML.replace("__GATEWAY_API_KEY__", os.getenv("GATEWAY_API_KEY", ""))
+
+
+@app.get("/ui", response_class=HTMLResponse)
+async def ui_root():
+    return _get_ui_html()
+
+
+@app.get("/ui/index.html", response_class=HTMLResponse)
+async def ui_index():
+    return _get_ui_html()
+
+
+@app.post("/mcp")
+async def mcp_post(request: Request):
+    body = await request.body()
+    headers = {
+        "x-request-id": request.state.request_id,
+        "accept": "application/json, text/event-stream",
+    }
+    content_type = request.headers.get("content-type")
+    if content_type:
+        headers["content-type"] = content_type
+    mcp_session_id = request.headers.get("mcp-session-id")
+    if mcp_session_id:
+        headers["mcp-session-id"] = mcp_session_id
+    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+        r = await client.post(f"{MCP}/mcp", content=body, headers=headers)
+    resp_headers = {"content-type": r.headers.get("content-type", "application/json")}
+    for h in ("mcp-session-id", "mcp-protocol-version", "last-event-id"):
+        if h in r.headers:
+            resp_headers[h] = r.headers[h]
+    return Response(content=r.content, status_code=r.status_code, headers=resp_headers)

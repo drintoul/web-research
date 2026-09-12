@@ -1,6 +1,6 @@
 # Web Research Stack
 
-A self-hosted web research platform that exposes one stable interface for web search, discovery, scraping, crawling, structured extraction, and browser interaction.
+A self-hosted web research platform that exposes one stable set of web research endpoints (REST and MCP) for search, discovery, scraping, crawling, structured extraction, and browser interaction, plus a built-in Web UI for exercising all endpoints.
 
 The stack deliberately combines several specialized services rather than trying to make one component do everything:
 
@@ -14,35 +14,31 @@ The stack deliberately combines several specialized services rather than trying 
 | Interact | Dedicated Playwright browser-automation service, with optional Ollama selector resolution |
 | REST | Unified FastAPI gateway on port `8080` |
 | MCP | FastMCP server exposing the same capabilities on port `8081` |
+| Test UI | Served by the gateway at `/ui` for manually testing REST and MCP endpoints |
 
 > **Important:** this Compose project does **not** start Ollama or SearXNG. It is designed to reuse the Ollama and SearXNG instances you already run separately.
 
 ## Architecture
 
-```text
-                          Applications / LangGraph / Agents
-                                      |
-                      +---------------+---------------+
-                      |                               |
-                 REST :8080                       MCP :8081
-                      |                               |
-                      +---------------+---------------+
-                                      |
-                                Gateway API
-                                      |
-             +------------------------+------------------------+
-             |                         |                        |
-       Firecrawl API              Extract API             Interact API
-   search/map/scrape/crawl       structured JSON          Playwright
-             |                         |                        |
-             |                         +------ Ollama ----------+
-             |
-          SearXNG
+```mermaid
+flowchart TD
+    A[Applications / LangGraph / Agents] --> B[REST API<br/>http://127.0.0.1:8084]
+    A --> C[MCP Server<br/>http://127.0.0.1:8083/mcp]
+    B --> D[Unified Gateway API]
+    C --> D
+    D --> E[Firecrawl API<br/>search / map / scrape / crawl]
+    D --> F[Extract API<br/>structured JSON via Ollama]
+    D --> G[Interact API<br/>Playwright browser automation]
+    E --> H[(SearXNG)]
+    F --> I[(Ollama)]
+    G --> I
+    E -.-> J[Playwright page rendering]
+    G --> K[Playwright stateful sessions]
+```
 
 External existing services:
-  Ollama  -> http://host.docker.internal:11434
-  SearXNG -> http://host.docker.internal:8088
-```
+- **Ollama** → `http://host.docker.internal:11434`
+- **SearXNG** → `http://host.docker.internal:8088`
 
 Firecrawl also runs its own internal Playwright service for page scraping. The `interact` service is separate and exists specifically for stateful browser automation such as navigating, clicking, typing, selecting, scrolling, reading page text, and taking screenshots.
 
@@ -67,6 +63,7 @@ web-research-stack/
 ├── .env.example
 ├── .dockerignore
 ├── .gitignore
+├── data/      # runtime bind mounts (gitignored)
 ├── Dockerfile.python
 ├── requirements.txt
 ├── Makefile
@@ -85,9 +82,12 @@ web-research-stack/
 │   └── security.py
 ├── mcp/
 │   └── server.py
+├── ui/
+│   └── index.html
 ├── scripts/
 │   ├── lib.sh
 │   ├── test-all.sh
+│   ├── test-endpoints.sh
 │   ├── test-functionality.sh
 │   ├── test-mcp.sh
 │   └── test-security.sh
@@ -233,13 +233,30 @@ Follow logs:
 docker compose logs -f --tail=200
 ```
 
-The two public interfaces are bound to loopback by default:
+The public interfaces are bound to loopback by default:
 
 ```text
-REST API:    http://127.0.0.1:8080
-OpenAPI UI:  http://127.0.0.1:8080/docs
-MCP server:  http://127.0.0.1:8081/mcp
+REST API:    http://127.0.0.1:8084
+OpenAPI UI:  http://127.0.0.1:8084/docs
+MCP server:  http://127.0.0.1:8083/mcp
+Web UI:      http://127.0.0.1:8084/ui  (test/exercise all endpoints; auth required to send requests)
 ```
+
+## UI screenshots
+
+The following placeholder images document the test UI once screenshots are captured. Replace the placeholder paths with the actual files.
+
+![MCP tab showing the initialize / list tools / call tool flow](docs/screenshots/mcp-tab.png)
+
+_Figure 1: MCP tab with a session-aware step flow and the tool name / parameters form._
+
+![Interact tab showing the browser session flow and interactive element list](docs/screenshots/interact-tab.png)
+
+_Figure 2: Interact tab after pre-querying a URL for interactive elements._
+
+![Interact Plan tab showing a natural-language goal and generated action plan](docs/screenshots/interact-plan-tab.png)
+
+_Figure 3: Plan tab with use-case buttons for Login and Search and an LLM-generated action plan._
 
 # 5. REST API usage
 
@@ -249,7 +266,7 @@ Set the gateway key once for shell examples:
 
 ```bash
 export WRS_KEY='replace-with-your-GATEWAY_API_KEY'
-export WRS='http://127.0.0.1:8080'
+export WRS='http://127.0.0.1:8084'
 ```
 
 All gateway requests use:
@@ -403,6 +420,67 @@ Typical response shape:
 }
 ```
 
+### Extract request fields
+
+| Field | Required | Description |
+|---|---|---|
+| `url` | one of `url` or `content` | Page to scrape through Firecrawl before extraction. |
+| `content` | one of `url` or `content` | Raw text or markdown to extract from directly, skipping the scrape step. |
+| `instruction` | yes | Plain-language description of what to extract. Be specific. |
+| `schema` | yes | JSON Schema describing the desired output shape. Use `additionalProperties: false` to keep the model focused. |
+| `model` | no | Override the Ollama model for this call only. Defaults to `OLLAMA_MODEL` from `.env`. |
+| `max_retries` | no | Maximum number of JSON Schema validation retries. Defaults to `EXTRACT_MAX_RETRIES` from `.env`. |
+
+You can supply either `url` or `content`, but not both. The gateway checks for at least one.
+
+### More extract examples
+
+**Extract from supplied content**
+
+```bash
+curl -sS "$WRS/v1/extract" \
+  -H "Authorization: Bearer $WRS_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "content": "The Blue Bistro serves seafood on 123 Main St, Boston. Phone: 555-0100.",
+    "instruction": "Extract the restaurant name, cuisine, street address, and phone number.",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "name": {"type": "string"},
+        "cuisine": {"type": "string"},
+        "address": {"type": "string"},
+        "phone": {"type": "string"}
+      },
+      "required": ["name", "cuisine", "address", "phone"],
+      "additionalProperties": false
+    }
+  }' | jq
+```
+
+**Override the Ollama model for one call**
+
+```bash
+curl -sS "$WRS/v1/extract" \
+  -H "Authorization: Bearer $WRS_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "url": "https://example.com",
+    "instruction": "Extract the page title and a short summary.",
+    "model": "qwen2.5:14b",
+    "max_retries": 2,
+    "schema": {
+      "type": "object",
+      "properties": {
+        "title": {"type": ["string", "null"]},
+        "summary": {"type": ["string", "null"]}
+      },
+      "required": ["title", "summary"],
+      "additionalProperties": false
+    }
+  }' | jq
+```
+
 ## Extract from content you already have
 
 This avoids an unnecessary scrape:
@@ -511,6 +589,295 @@ curl -sS "$WRS/v1/interact/sessions/$SESSION_ID" \
   -H "Authorization: Bearer $WRS_KEY" | jq
 ```
 
+## Scenario recipes and best practices
+
+These recipes mirror the Firecrawl V1 recommendations through the gateway contract. Every example uses `Authorization: Bearer $WRS_KEY` and `Content-Type: application/json` for `POST` requests.
+
+### Search and read the top results
+
+Firecrawl returns search metadata by default. Ask for `scrapeOptions` with `markdown` to get full page content, and use `onlyMainContent: true` to skip navigation/footers.
+
+```bash
+curl -sS "$WRS/v1/search" \
+  -H "Authorization: Bearer $WRS_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "query": "Royal Caribbean Alaska 2027",
+    "limit": 5,
+    "scrapeOptions": {
+      "formats": ["markdown"],
+      "onlyMainContent": true
+    }
+  }' | jq
+```
+
+### Search with a time filter
+
+Use `tbs` to limit results to a recent period (`qdr:w` = past week, `qdr:m` = past month).
+
+```bash
+curl -sS "$WRS/v1/search" \
+  -H "Authorization: Bearer $WRS_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "query": "NVIDIA stock news",
+    "limit": 5,
+    "tbs": "qdr:d",
+    "scrapeOptions": {
+      "formats": ["markdown"],
+      "onlyMainContent": true
+    }
+  }' | jq
+```
+
+### Discover a site through its sitemap
+
+`map` is the fastest way to get URLs. `sitemapOnly: true` returns only sitemap links, while `search` lets you target a topic.
+
+```bash
+curl -sS "$WRS/v1/map" \
+  -H "Authorization: Bearer $WRS_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "url": "https://www.princess.com",
+    "limit": 100,
+    "sitemapOnly": true,
+    "includeSubdomains": false
+  }' | jq
+```
+
+### Map a site for a topic
+
+```bash
+curl -sS "$WRS/v1/map" \
+  -H "Authorization: Bearer $WRS_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "url": "https://www.royalcaribbean.com",
+    "search": "Alaska cruise",
+    "limit": 50,
+    "ignoreSitemap": false
+  }' | jq
+```
+
+### Scrape a page with multiple formats
+
+Request `markdown`, `links`, and `screenshot` at the same time. Always inspect `data.metadata.statusCode`; a gateway `200` does not guarantee the target page loaded cleanly.
+
+```bash
+curl -sS "$WRS/v1/scrape" \
+  -H "Authorization: Bearer $WRS_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "url": "https://www.princess.com",
+    "formats": ["markdown", "links", "screenshot"],
+    "onlyMainContent": true,
+    "waitFor": 1000
+  }' | jq '.data | {statusCode: .metadata.statusCode, markdown: .markdown[:200], links: .links[:5], screenshot: .screenshot}'
+```
+
+### Scrape a product page
+
+Use the `product` format for deterministic product extraction on product pages.
+
+```bash
+curl -sS "$WRS/v1/scrape" \
+  -H "Authorization: Bearer $WRS_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "url": "https://example.com/product",
+    "formats": ["product", "markdown"],
+    "onlyMainContent": true
+  }' | jq '.data.product'
+```
+
+### Scrape with custom headers
+
+Send headers such as `Accept-Language` or a custom user-agent.
+
+```bash
+curl -sS "$WRS/v1/scrape" \
+  -H "Authorization: Bearer $WRS_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "url": "https://example.com",
+    "formats": ["markdown"],
+    "headers": {
+      "Accept-Language": "fr-CA,fr;q=0.9",
+      "User-Agent": "Mozilla/5.0 (compatible; ResearchBot/1.0)"
+    }
+  }' | jq
+```
+
+### Crawl a site with controlled depth and paths
+
+Limit scope with `maxDepth`, `includePaths`, and `excludePaths`. Use `scrapeOptions` to keep the returned data small.
+
+```bash
+curl -sS "$WRS/v1/crawl" \
+  -H "Authorization: Bearer $WRS_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "url": "https://www.princess.com",
+    "limit": 20,
+    "maxDepth": 2,
+    "includePaths": ["cruise.*"],
+    "excludePaths": [".*/blog/.*"],
+    "scrapeOptions": {
+      "formats": ["markdown"],
+      "onlyMainContent": true
+    }
+  }' | jq
+```
+
+### Crawl an entire domain
+
+Set `crawlEntireDomain: true` to follow sibling and parent links, not just child paths.
+
+```bash
+curl -sS "$WRS/v1/crawl" \
+  -H "Authorization: Bearer $WRS_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "url": "https://example.com",
+    "limit": 100,
+    "crawlEntireDomain": true,
+    "scrapeOptions": {
+      "formats": ["markdown"],
+      "onlyMainContent": true
+    }
+  }' | jq
+```
+
+### Crawl with a webhook
+
+Receive `crawl.started`, `crawl.page`, `crawl.completed`, and `crawl.failed` events at your endpoint as the crawl progresses.
+
+```bash
+curl -sS "$WRS/v1/crawl" \
+  -H "Authorization: Bearer $WRS_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "url": "https://example.com",
+    "limit": 50,
+    "webhook": "https://your-app.example.com/webhooks/firecrawl",
+    "scrapeOptions": {
+      "formats": ["markdown"],
+      "onlyMainContent": true
+    }
+  }' | jq
+```
+
+### Extract structured data from a URL
+
+```bash
+curl -sS "$WRS/v1/extract" \
+  -H "Authorization: Bearer $WRS_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "url": "https://www.princess.com",
+    "instruction": "Extract the cruise line name, featured destinations, and a one-sentence tagline.",
+    "max_retries": 2,
+    "schema": {
+      "type": "object",
+      "properties": {
+        "cruise_line": {"type": ["string", "null"]},
+        "destinations": {"type": "array", "items": {"type": "string"}},
+        "tagline": {"type": ["string", "null"]}
+      },
+      "required": ["cruise_line", "destinations", "tagline"],
+      "additionalProperties": false
+    }
+  }' | jq
+```
+
+### Extract from already-scraped content
+
+Skip the scrape by passing `content` directly.
+
+```bash
+curl -sS "$WRS/v1/extract" \
+  -H "Authorization: Bearer $WRS_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "content": "The Blue Bistro serves seafood on 123 Main St, Boston. Phone: 555-0100.",
+    "instruction": "Extract the restaurant name, cuisine, street address, and phone number.",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "name": {"type": "string"},
+        "cuisine": {"type": "string"},
+        "address": {"type": "string"},
+        "phone": {"type": "string"}
+      },
+      "required": ["name", "cuisine", "address", "phone"],
+      "additionalProperties": false
+    }
+  }' | jq
+```
+
+### Browser automation flow
+
+Create, navigate, act, and close. Use explicit selectors or accessible text descriptions.
+
+```bash
+# Step 1: create
+SESSION_ID=$(curl -sS "$WRS/v1/interact/sessions" \
+  -X POST \
+  -H "Authorization: Bearer $WRS_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{}' | jq -r '.session_id')
+
+# Step 2: navigate
+curl -sS "$WRS/v1/interact/sessions/$SESSION_ID/navigate" \
+  -H "Authorization: Bearer $WRS_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"url": "https://www.princess.com", "wait_until": "networkidle"}' | jq
+
+# Step 3: click a search link
+curl -sS "$WRS/v1/interact/sessions/$SESSION_ID/action" \
+  -H "Authorization: Bearer $WRS_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "action": "click",
+    "selector": "text=Search"
+  }' | jq
+
+# Step 4: screenshot
+curl -sS "$WRS/v1/interact/sessions/$SESSION_ID/screenshot" \
+  -H "Authorization: Bearer $WRS_KEY" \
+  -o screenshot.png
+
+# Step 5: close
+curl -sS "$WRS/v1/interact/sessions/$SESSION_ID" \
+  -X DELETE \
+  -H "Authorization: Bearer $WRS_KEY" | jq
+```
+
+### Consequential actions
+
+The interact service blocks clicks that look consequential unless you explicitly set `allow_consequential: true`. An agent should only set this after user approval.
+
+```bash
+curl -sS "$WRS/v1/interact/sessions/$SESSION_ID/action" \
+  -H "Authorization: Bearer $WRS_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "action": "click",
+    "selector": "text=Confirm booking",
+    "allow_consequential": true
+  }' | jq
+```
+
+### General best-practice notes
+
+- `onlyMainContent: true` is the default in Firecrawl V1, so you usually get clean content without specifying it.
+- For `scrape` and `crawl` responses, check `data.metadata.statusCode` after confirming `success: true`; HTTP `200` from the gateway means the call reached Firecrawl, but the target page may have returned an error.
+- Combine `formats` arrays to fetch multiple outputs (e.g., `markdown` + `links` + `screenshot`) in one call.
+- Use `map` to discover URLs before an expensive `crawl`.
+- Use `extract` when you need a guaranteed JSON shape; use `scrape` with `json` or `product` formats for ad-hoc structured output.
+- Keep `interact` sessions short-lived and always `DELETE` them when finished.
+
 # 6. MCP usage
 
 The MCP server is an alternate interface over the **same REST gateway**. It does not maintain a second implementation of search, scrape, crawl, extract, or browser interaction.
@@ -519,7 +886,7 @@ The MCP server is an alternate interface over the **same REST gateway**. It does
 MCP client
    |
    v
-http://127.0.0.1:8081/mcp
+http://127.0.0.1:8083/mcp
    |
    v
 FastMCP server
@@ -535,7 +902,7 @@ REST gateway
 The MCP endpoint uses **Streamable HTTP**:
 
 ```text
-http://127.0.0.1:8081/mcp
+http://127.0.0.1:8083/mcp
 ```
 
 Because the Compose file binds MCP to `127.0.0.1`, it is accessible only from the Docker host by default. This is intentional. If you expose MCP to another machine, put it behind TLS and authentication rather than simply changing the bind address.
@@ -574,7 +941,7 @@ from fastmcp import Client
 
 
 async def main():
-    async with Client("http://127.0.0.1:8081/mcp") as client:
+    async with Client("http://127.0.0.1:8083/mcp") as client:
         tools = await client.list_tools()
         print([tool.name for tool in tools])
 
@@ -727,7 +1094,7 @@ browser_close_session
 For MCP clients that accept a Streamable HTTP URL, configure the server URL as:
 
 ```text
-http://127.0.0.1:8081/mcp
+http://127.0.0.1:8083/mcp
 ```
 
 The exact client configuration syntax varies by application. The key point is that the client connects directly to that URL; it does **not** connect to Firecrawl itself.
@@ -756,7 +1123,7 @@ Both interfaces reach the same underlying services.
 For deterministic LangGraph nodes, point all web-research HTTP calls at:
 
 ```text
-http://<docker-host>:8080
+http://<docker-host>:8084
 ```
 
 Do not let individual nodes depend directly on Firecrawl's URL. For example:
@@ -773,7 +1140,7 @@ interact node -> /v1/interact/...
 For an MCP-driven agent, connect the MCP client to:
 
 ```text
-http://<docker-host>:8081/mcp
+http://<docker-host>:8083/mcp
 ```
 
 This separation lets you replace a backend later without rewriting the graph.
@@ -834,7 +1201,7 @@ An agent should set this only after the application has obtained explicit user a
 ## Gateway
 
 ```bash
-curl -sS http://127.0.0.1:8080/health | jq
+curl -sS http://127.0.0.1:8084/health | jq
 ```
 
 If you enabled `GATEWAY_API_KEY` and your middleware requires it for health in a future version, add the Authorization header.
@@ -918,8 +1285,8 @@ The live shell tests require `curl`, `python3`, and Docker. They automatically r
 By default the end-to-end tests use:
 
 ```text
-REST gateway:  http://127.0.0.1:8080
-MCP endpoint:  http://127.0.0.1:8081/mcp
+REST gateway:  http://127.0.0.1:8084
+MCP endpoint:  http://127.0.0.1:8083/mcp
 Public test URL: https://example.com
 Search query:   example domain
 ```
@@ -927,8 +1294,8 @@ Search query:   example domain
 Override them when needed:
 
 ```bash
-GATEWAY_URL=http://127.0.0.1:8080 \
-MCP_URL=http://127.0.0.1:8081/mcp \
+GATEWAY_URL=http://127.0.0.1:8084 \
+MCP_URL=http://127.0.0.1:8083/mcp \
 TEST_URL=https://www.iana.org \
 SEARCH_QUERY='IANA reserved domains' \
 ./scripts/test-all.sh
@@ -1051,6 +1418,20 @@ browser_action
 browser_text
 browser_screenshot
 browser_close_session
+```
+
+## Live endpoint regression
+
+A wider endpoint regression suite with multiple checks per endpoint is also available:
+
+```bash
+./scripts/test-endpoints.sh
+```
+
+To skip tests that require a working SearXNG endpoint:
+
+```bash
+SKIP_NETWORK_TESTS=1 ./scripts/test-endpoints.sh
 ```
 
 ## Run everything

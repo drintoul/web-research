@@ -33,6 +33,17 @@ class ExtractRequest(BaseModel):
     max_retries: int | None = Field(default=None, ge=0, le=5)
 
 
+class SchemaSuggestRequest(BaseModel):
+    instruction: str = Field(min_length=1)
+    content: str | None = None
+    model: str | None = None
+
+
+class InstructionSuggestRequest(BaseModel):
+    content: str = Field(min_length=1)
+    model: str | None = None
+
+
 @app.get("/health")
 async def health():
     try:
@@ -103,3 +114,94 @@ async def extract(req: ExtractRequest):
             last_error = str(exc)
 
     raise HTTPException(422, detail={"message": "Extraction failed validation", "error": last_error})
+
+
+@app.post("/v1/schema-suggest")
+async def schema_suggest(req: SchemaSuggestRequest):
+    model = req.model or DEFAULT_MODEL
+    system = (
+        "You are a JSON Schema assistant. Given an extraction instruction and optional content sample, "
+        "produce a JSON Schema that describes the fields to extract. "
+        "Use standard JSON Schema draft 2020-12. "
+        "Return a JSON object with a single top-level key 'schema' containing the generated schema. "
+        "Provide no explanation."
+    )
+    user = f"Instruction:\n{req.instruction}"
+    if req.content:
+        user += f"\n\nContent sample:\n{req.content[:500]}"
+    user += "\n\nReturn only a JSON object with a top-level 'schema' field."
+
+    suggest_format = {
+        "type": "object",
+        "properties": {"schema": {"type": "object"}},
+        "required": ["schema"],
+    }
+
+    payload = {
+        "model": model,
+        "stream": False,
+        "format": suggest_format,
+        "options": {"temperature": 0},
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+            response = await client.post(f"{OLLAMA}/api/chat", json=payload)
+        response.raise_for_status()
+        raw = response.json()["message"]["content"]
+        data = json.loads(raw)
+        return {"schema": data["schema"]}
+    except (httpx.HTTPError, KeyError, json.JSONDecodeError) as exc:
+        raise HTTPException(422, detail={"message": "Schema suggestion failed", "error": str(exc)})
+
+
+@app.post("/v1/instruction-suggest")
+async def instruction_suggest(req: InstructionSuggestRequest):
+    model = req.model or DEFAULT_MODEL
+    system = (
+        "You are a structured data extraction assistant. Given a web page's main content, "
+        "propose a concise, schema-oriented extraction instruction that always starts with the word 'Extract'. "
+        "List the fields to capture, such as title, description, prices, dates, locations, contact info, "
+        "product details, or itinerary information. Do not tell the user to do anything. "
+        "GOOD example: 'Extract the cruise line name, departure ports, destinations, ship names, and available itineraries.' "
+        "Return a JSON object with a single top-level key 'instruction' containing only the suggested instruction text. "
+        "Provide no explanation."
+    )
+    user = (
+        "Given the following web page content, write a concise schema-oriented extraction instruction. "
+        "It must start with the word 'Extract' and list the structured fields to pull from the page. "
+        "Do not describe actions, navigation, forms, sign-ups, or anything the user should do.\n\n"
+        f"Content:\n{req.content[:4000]}"
+        "\n\nReturn only a JSON object with a top-level 'instruction' field."
+    )
+
+    suggest_format = {
+        "type": "object",
+        "properties": {"instruction": {"type": "string"}},
+        "required": ["instruction"],
+    }
+
+    payload = {
+        "model": model,
+        "stream": False,
+        "format": suggest_format,
+        "options": {"temperature": 0},
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+            response = await client.post(f"{OLLAMA}/api/chat", json=payload)
+        response.raise_for_status()
+        raw = response.json()["message"]["content"]
+        data = json.loads(raw)
+        return {"instruction": data["instruction"]}
+    except (httpx.HTTPError, KeyError, json.JSONDecodeError) as exc:
+        raise HTTPException(422, detail={"message": "Instruction suggestion failed", "error": str(exc)})

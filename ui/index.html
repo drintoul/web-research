@@ -1,0 +1,1160 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Web Research Endpoint Tester</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .tab-active { border-bottom: 2px solid #2563eb; color: #2563eb; }
+    .subtab-active { background-color: #dbeafe; color: #1e40af; }
+    pre { white-space: pre-wrap; word-break: break-word; }
+  </style>
+  <script>
+    window.GATEWAY_API_KEY = "__GATEWAY_API_KEY__";
+  </script>
+</head>
+<body class="h-full bg-slate-50 text-slate-800">
+  <div class="min-h-full p-6">
+    <header class="max-w-6xl mx-auto mb-6">
+      <h1 class="text-2xl font-bold mb-2">Web Research Endpoint Tester</h1>
+      <div class="flex items-center gap-4">
+        <span class="text-sm text-slate-600">API Key loaded from server</span>
+        <input id="api-key" type="hidden" value="__GATEWAY_API_KEY__" />
+      </div>
+      <div id="health-indicators" class="mt-3 flex flex-wrap items-center gap-3 text-sm">
+        <span class="text-slate-500">Checking health...</span>
+      </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto bg-white rounded-lg shadow p-6">
+      <nav class="flex gap-2 border-b mb-4 overflow-x-auto" id="main-tabs"></nav>
+
+      <!-- Scrape -->
+      <section id="tab-scrape" class="tab-content hidden">
+        <div class="mb-2 text-sm text-slate-500">POST <span class="font-mono">/v1/scrape</span></div>
+        <label class="block text-sm font-medium mb-1">JSON body</label>
+        <textarea id="scrape-body" rows="6" class="w-full border rounded p-2 font-mono text-sm">{
+  "url": "https://www.princess.com",
+  "formats": ["markdown"]
+}</textarea>
+        <div class="flex items-center gap-2 mt-2">
+          <button onclick="sendPost('/v1/scrape','scrape-body','scrape-out')" class="bg-blue-600 text-white px-4 py-2 rounded">Send</button>
+          <span class="text-xs text-slate-500">Step 1: send the scrape request</span>
+        </div>
+        <div class="mt-2 flex flex-wrap gap-2">
+          <button onclick="loadExample('scrape-body', {url: sampleUrl(), formats: ['markdown']})" class="text-sm text-blue-600 underline py-2">Markdown</button>
+          <button onclick="loadExample('scrape-body', {url: sampleUrl(), formats: ['markdown', 'links', 'screenshot']})" class="text-sm text-blue-600 underline py-2">Markdown + links + screenshot</button>
+          <button onclick="loadExample('scrape-body', {url: sampleUrl(), formats: ['product', 'markdown']})" class="text-sm text-blue-600 underline py-2">Product page</button>
+          <button onclick="loadExample('scrape-body', {url: sampleUrl(), formats: ['markdown'], headers: {'Accept-Language': 'en-US,en;q=0.9'}})" class="text-sm text-blue-600 underline py-2">Custom headers</button>
+        </div>
+        <pre id="scrape-out" class="mt-4 p-3 bg-slate-100 rounded text-sm"></pre>
+      </section>
+
+      <!-- Map -->
+      <section id="tab-map" class="tab-content hidden">
+        <div class="mb-2 text-sm text-slate-500">POST <span class="font-mono">/v1/map</span></div>
+        <label class="block text-sm font-medium mb-1">JSON body</label>
+        <textarea id="map-body" rows="6" class="w-full border rounded p-2 font-mono text-sm">{
+  "url": "https://www.princess.com",
+  "limit": 10
+}</textarea>
+        <div class="flex items-center gap-2 mt-2">
+          <button onclick="sendPost('/v1/map','map-body','map-out')" class="bg-blue-600 text-white px-4 py-2 rounded">Send</button>
+          <span class="text-xs text-slate-500">Step 1: send the map request</span>
+        </div>
+        <div class="mt-2 flex flex-wrap gap-2">
+          <button onclick="loadExample('map-body', {url: sampleUrl(), limit: 50})" class="text-sm text-blue-600 underline py-2">Basic map</button>
+          <button onclick="loadExample('map-body', {url: sampleUrl(), limit: 100, sitemapOnly: true, includeSubdomains: false})" class="text-sm text-blue-600 underline py-2">Sitemap only</button>
+          <button onclick="loadExample('map-body', {url: sampleUrl(), limit: 50, search: 'Alaska cruise'})" class="text-sm text-blue-600 underline py-2">Topic search</button>
+        </div>
+        <pre id="map-out" class="mt-4 p-3 bg-slate-100 rounded text-sm"></pre>
+      </section>
+
+      <!-- Crawl -->
+      <section id="tab-crawl" class="tab-content hidden">
+        <div class="mb-2 text-sm text-slate-500">POST <span class="font-mono">/v1/crawl</span></div>
+        <label class="block text-sm font-medium mb-1">JSON body</label>
+        <textarea id="crawl-body" rows="7" class="w-full border rounded p-2 font-mono text-sm">{
+  "url": "https://www.princess.com",
+  "limit": 2,
+  "includePaths": [],
+  "excludePaths": []
+}</textarea>
+        <div class="flex items-center gap-2 mt-2">
+          <button onclick="startCrawl()" class="bg-blue-600 text-white px-4 py-2 rounded">Start Crawl</button>
+          <span class="text-xs text-slate-500">Step 1: start the crawl job</span>
+        </div>
+        <div class="mt-2 flex flex-wrap gap-2">
+          <button onclick="loadExample('crawl-body', {url: sampleUrl(), limit: 2, includePaths: [], excludePaths: []})" class="text-sm text-blue-600 underline py-2">Basic crawl</button>
+          <button onclick="loadExample('crawl-body', {url: sampleUrl(), limit: 20, maxDepth: 2, includePaths: ['cruise.*'], excludePaths: ['.*/blog/.*'], scrapeOptions: {formats: ['markdown'], onlyMainContent: true}})" class="text-sm text-blue-600 underline py-2">Controlled depth</button>
+          <button onclick="loadExample('crawl-body', {url: sampleUrl(), limit: 50, crawlEntireDomain: true, scrapeOptions: {formats: ['markdown'], onlyMainContent: true}})" class="text-sm text-blue-600 underline py-2">Entire domain</button>
+        </div>
+        <div class="mt-4 flex gap-2">
+          <input id="crawl-job" type="text" placeholder="job id" class="border rounded px-3 py-1 flex-1 font-mono" />
+          <div class="flex items-center gap-2">
+            <button onclick="checkCrawl()" class="bg-slate-600 text-white px-4 py-2 rounded">Check Status</button>
+            <span class="text-xs text-slate-500">Step 2: check the job status</span>
+          </div>
+        </div>
+        <pre id="crawl-out" class="mt-4 p-3 bg-slate-100 rounded text-sm"></pre>
+      </section>
+
+      <!-- Search -->
+      <section id="tab-search" class="tab-content hidden">
+        <div class="mb-2 text-sm text-slate-500">POST <span class="font-mono">/v1/search</span></div>
+        <label class="block text-sm font-medium mb-1">JSON body</label>
+        <textarea id="search-body" rows="5" class="w-full border rounded p-2 font-mono text-sm">{
+  "query": "example domain",
+  "limit": 3
+}</textarea>
+        <div class="flex items-center gap-2 mt-2">
+          <button onclick="sendPost('/v1/search','search-body','search-out')" class="bg-blue-600 text-white px-4 py-2 rounded">Send</button>
+          <span class="text-xs text-slate-500">Step 1: send the search request</span>
+        </div>
+        <div class="mt-2 flex flex-wrap gap-2">
+          <button onclick="loadExample('search-body', {query: 'example domain', limit: 3})" class="text-sm text-blue-600 underline py-2">Simple search</button>
+          <button onclick="loadExample('search-body', {query: 'Royal Caribbean Alaska 2027', limit: 5, scrapeOptions: {formats: ['markdown'], onlyMainContent: true}})" class="text-sm text-blue-600 underline py-2">Read results as markdown</button>
+          <button onclick="loadExample('search-body', {query: 'NVIDIA stock news', limit: 5, tbs: 'qdr:d', scrapeOptions: {formats: ['markdown'], onlyMainContent: true}})" class="text-sm text-blue-600 underline py-2">Recent news</button>
+        </div>
+        <pre id="search-out" class="mt-4 p-3 bg-slate-100 rounded text-sm"></pre>
+      </section>
+
+      <!-- Extract -->
+      <section id="tab-extract" class="tab-content hidden">
+        <div class="mb-2 text-sm text-slate-500">POST <span class="font-mono">/v1/extract</span></div>
+        <label class="block text-sm font-medium mb-1">URL for schema generation</label>
+        <input id="schema-url" type="text" value="https://www.princess.com" class="w-full border rounded px-3 py-2 mb-2 font-mono text-sm" />
+        <div class="flex items-center gap-2 mb-3">
+          <button onclick="refreshSchemaUrl()" class="bg-slate-500 text-white px-4 py-2 rounded">Random sample URL</button>
+          <span class="text-xs text-slate-500">Step 1: pick a page</span>
+        </div>
+        <label class="block text-sm font-medium mb-1">Instruction for schema generation</label>
+        <input id="schema-instruction" name="schema-instruction" type="text" value="Extract the page title, a one-sentence summary, and the main topic." autocomplete="off" placeholder="e.g. Extract the page title and a short summary" class="w-full border rounded px-3 py-2 mb-2 font-mono text-sm" />
+        <div class="flex items-center gap-2 mb-3">
+          <button onclick="suggestInstruction()" class="bg-slate-500 text-white px-4 py-2 rounded">Suggest instruction</button>
+          <span class="text-xs text-slate-500">Step 2: describe what to extract</span>
+        </div>
+        <button onclick="generateSchema()" class="mb-1 bg-slate-600 text-white px-4 py-2 rounded">Generate / Refresh schema</button>
+        <div class="text-xs text-slate-500 mb-4">Step 3: produce the JSON schema</div>
+        <label class="block text-sm font-medium mb-1">JSON body</label>
+        <textarea id="extract-body" rows="16" class="w-full border rounded p-2 font-mono text-sm">{
+  "url": "https://www.princess.com",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "title": { "type": "string" }
+    },
+    "required": ["title"]
+  }
+}</textarea>
+        <div class="mt-2 flex flex-wrap gap-2">
+          <button onclick="sendPost('/v1/extract','extract-body','extract-out')" class="bg-blue-600 text-white px-4 py-2 rounded">Send</button>
+          <button onclick="loadExample('extract-body', {url: sampleUrl(), instruction: 'Extract the page title.', schema: {type: 'object', properties: {title: {type: 'string'}}, required: ['title']}})" class="text-sm text-blue-600 underline py-2">Simple URL</button>
+          <button onclick="loadExample('extract-body', {url: sampleUrl(), instruction: 'Extract the page title, a one-sentence summary, and the main topic.', schema: {type: 'object', properties: {title: {type: 'string'}, summary: {type: 'string'}, topic: {type: 'string'}}, required: ['title','summary','topic']}})" class="text-sm text-blue-600 underline py-2">Complex schema</button>
+          <button onclick="loadExample('extract-body', {url: sampleUrl(), instruction: 'Extract product details: name, price, rating, and whether it is in stock.', schema: {type: 'object', properties: {name: {type: 'string'}, price: {type: 'string'}, rating: {type: 'string'}, in_stock: {type: 'boolean'}}, required: ['name','price','rating','in_stock']}})" class="text-sm text-blue-600 underline py-2">Product page</button>
+          <button onclick="loadExample('extract-body', {url: sampleUrl(), instruction: 'Extract the article headline, author, publish date, and a short summary.', schema: {type: 'object', properties: {headline: {type: 'string'}, author: {type: 'string'}, published_at: {type: 'string'}, summary: {type: 'string'}}, required: ['headline','author','published_at','summary']}})" class="text-sm text-blue-600 underline py-2">News article</button>
+          <button onclick="loadExample('extract-body', {url: sampleUrl(), instruction: 'Extract the recipe name, list of ingredients, and total cooking time.', schema: {type: 'object', properties: {name: {type: 'string'}, ingredients: {type: 'array', items: {type: 'string'}}, cook_time: {type: 'string'}}, required: ['name','ingredients','cook_time']}})" class="text-sm text-blue-600 underline py-2">Recipe</button>
+          <button onclick="loadExample('extract-body', {url: sampleUrl(), instruction: 'Extract the job title, company, location, and salary range.', schema: {type: 'object', properties: {title: {type: 'string'}, company: {type: 'string'}, location: {type: 'string'}, salary: {type: 'string'}}, required: ['title','company','location','salary']}})" class="text-sm text-blue-600 underline py-2">Job posting</button>
+          <button onclick="loadExample('extract-body', {url: sampleUrl(), instruction: 'Extract the event name, date, time, and venue.', schema: {type: 'object', properties: {name: {type: 'string'}, date: {type: 'string'}, time: {type: 'string'}, venue: {type: 'string'}}, required: ['name','date','time','venue']}})" class="text-sm text-blue-600 underline py-2">Event</button>
+          <button onclick="loadExample('extract-body', {url: sampleUrl(), instruction: 'Extract the package name, version, license, and a one-sentence description.', schema: {type: 'object', properties: {name: {type: 'string'}, version: {type: 'string'}, license: {type: 'string'}, description: {type: 'string'}}, required: ['name','version','license','description']}})" class="text-sm text-blue-600 underline py-2">Software package</button>
+          <button onclick="loadExample('extract-body', {url: sampleUrl(), instruction: 'Extract the research paper title, authors, and abstract.', schema: {type: 'object', properties: {title: {type: 'string'}, authors: {type: 'array', items: {type: 'string'}}, abstract: {type: 'string'}}, required: ['title','authors','abstract']}})" class="text-sm text-blue-600 underline py-2">Research paper</button>
+          <button onclick="loadExample('extract-body', {url: sampleUrl(), instruction: 'Extract the page title and a short summary.', model: 'qwen2.5:14b', max_retries: 2, schema: {type: 'object', properties: {title: {type: ['string','null']}, summary: {type: ['string','null']}}, required: ['title','summary']}})" class="text-sm text-blue-600 underline py-2">Model override</button>
+        </div>
+        <pre id="extract-out" class="mt-4 p-3 bg-slate-100 rounded text-sm"></pre>
+      </section>
+
+      <!-- Interact -->
+      <section id="tab-interact" class="tab-content hidden">
+        <div class="mb-2 text-sm text-slate-500">Browser automation <span class="font-mono">/v1/interact/*</span></div>
+        <div class="mb-3 p-3 bg-blue-50 border border-blue-100 rounded text-sm text-slate-700">
+          <strong>Browser session flow</strong>
+          <ol class="list-decimal list-inside mt-1 space-y-1">
+            <li><strong>Create</strong> a session and copy the session id.</li>
+            <li><strong>Navigate</strong> to a URL.</li>
+            <li>Read <strong>Text</strong>, capture a <strong>Screenshot</strong>, or perform an <strong>Action</strong>.</li>
+            <li><strong>Close</strong> the session when done.</li>
+          </ol>
+        </div>
+        <div class="mb-2 text-sm">Session status: <span id="interact-status" class="text-slate-500">— no session; create one first</span></div>
+        <nav class="flex gap-2 mb-4" id="interact-tabs"></nav>
+
+        <div id="interact-create" class="interact-content">
+          <div class="mb-2 text-sm text-slate-500">POST <span class="font-mono">/v1/interact/sessions</span></div>
+          <button onclick="createSession()" class="bg-blue-600 text-white px-4 py-2 rounded">Create Session</button>
+          <input type="hidden" id="interact-create-body" value="{}" />
+          <div id="sid-copy-row" class="mt-2 flex items-center gap-2 hidden">
+            <input id="current-sid" type="text" readonly placeholder="session id will appear here" class="flex-1 border rounded px-3 py-1 font-mono text-sm" />
+            <button onclick="copyCurrentSid()" class="bg-slate-500 text-white px-3 py-1 rounded text-sm">Copy</button>
+          </div>
+          <div class="text-xs text-slate-500 mt-1">Step 1: create a browser session</div>
+        </div>
+
+        <div id="interact-navigate" class="interact-content hidden">
+          <div class="mb-2 text-sm text-slate-500">POST <span class="font-mono">/v1/interact/sessions/{session_id}/navigate</span></div>
+          <div class="flex items-center gap-2 mb-2">
+            <input id="navigate-sid" type="text" placeholder="session id" class="sid-input border rounded px-3 py-1 flex-1 font-mono" />
+            <button onclick="pasteSid('navigate-sid')" class="bg-slate-500 text-white px-3 py-1 rounded text-sm">Paste</button>
+          </div>
+          <label class="block text-sm font-medium mb-1">JSON body</label>
+          <textarea id="navigate-body" rows="4" class="w-full border rounded p-2 font-mono text-sm">{
+  "url": "https://www.princess.com",
+  "wait_until": "domcontentloaded"
+}</textarea>
+          <button onclick="sendPostDyn('/v1/interact/sessions/' + sid('navigate-sid') + '/navigate','navigate-body','interact-out')" class="mt-2 bg-blue-600 text-white px-4 py-2 rounded">Navigate</button>
+          <div class="text-xs text-slate-500 mt-1">Step 2: load a URL into the session</div>
+          <div class="mt-2 flex items-center gap-2">
+            <button onclick="preQueryUrl()" class="text-sm bg-emerald-600 text-white px-3 py-1 rounded">Pre-query interactive elements</button>
+            <span class="text-xs text-slate-500">Creates a session, navigates, and lists interactive elements</span>
+          </div>
+        </div>
+
+        <div id="interact-text" class="interact-content hidden">
+          <div class="mb-2 text-sm text-slate-500">GET <span class="font-mono">/v1/interact/sessions/{session_id}/text</span></div>
+          <div class="flex items-center gap-2 mb-2">
+            <input id="text-sid" type="text" placeholder="session id" class="sid-input border rounded px-3 py-1 flex-1 font-mono" />
+            <button onclick="pasteSid('text-sid')" class="bg-slate-500 text-white px-3 py-1 rounded text-sm">Paste</button>
+          </div>
+          <button onclick="sendGet('/v1/interact/sessions/' + sid('text-sid') + '/text','interact-out')" class="bg-blue-600 text-white px-4 py-2 rounded">Get Text</button>
+          <div class="text-xs text-slate-500 mt-1">Step 3: extract the visible page text</div>
+        </div>
+
+        <div id="interact-screenshot" class="interact-content hidden">
+          <div class="mb-2 text-sm text-slate-500">GET <span class="font-mono">/v1/interact/sessions/{session_id}/screenshot</span></div>
+          <div class="flex items-center gap-2 mb-2">
+            <input id="screenshot-sid" type="text" placeholder="session id" class="sid-input border rounded px-3 py-1 flex-1 font-mono" />
+            <button onclick="pasteSid('screenshot-sid')" class="bg-slate-500 text-white px-3 py-1 rounded text-sm">Paste</button>
+          </div>
+          <button onclick="fetchScreenshot()" class="bg-blue-600 text-white px-4 py-2 rounded">Get Screenshot</button>
+          <div class="text-xs text-slate-500 mt-1">Step 3: capture a full-page screenshot</div>
+          <div id="screenshot-out" class="mt-4"></div>
+        </div>
+
+        <div id="interact-action" class="interact-content hidden">
+          <div class="mb-2 text-sm text-slate-500">POST <span class="font-mono">/v1/interact/sessions/{session_id}/action</span></div>
+          <div class="flex items-center gap-2 mb-2">
+            <input id="action-sid" type="text" placeholder="session id" class="sid-input border rounded px-3 py-1 flex-1 font-mono" />
+            <button onclick="pasteSid('action-sid')" class="bg-slate-500 text-white px-3 py-1 rounded text-sm">Paste</button>
+          </div>
+          <button onclick="sendGet('/v1/interact/sessions/' + sid('action-sid') + '/elements','interact-out')" class="mb-2 bg-slate-500 text-white px-4 py-2 rounded">List interactive elements</button>
+          <label class="block text-sm font-medium mb-1">JSON body</label>
+          <textarea id="action-body" rows="5" class="w-full border rounded p-2 font-mono text-sm">{
+  "action": "wait",
+  "value": "500"
+}</textarea>
+          <button onclick="sendPostDyn('/v1/interact/sessions/' + sid('action-sid') + '/action','action-body','interact-out')" class="mt-2 bg-blue-600 text-white px-4 py-2 rounded">Send Action</button>
+          <div class="text-xs text-slate-500 mt-1">Step 3: click, type, or otherwise act on the page</div>
+          <div class="mt-2 flex flex-wrap gap-2">
+            <button onclick='loadExample("action-body", {"action": "click", "selector": "text=Submit"})' class="text-sm text-blue-600 underline py-2">Click by text</button>
+            <button onclick='loadExample("action-body", {"action": "click", "selector": "input[type=checkbox]"})' class="text-sm text-blue-600 underline py-2">Toggle checkbox</button>
+            <button onclick='loadExample("action-body", {"action": "type", "selector": "input[name=q]", "value": "hello"})' class="text-sm text-blue-600 underline py-2">Type into input</button>
+            <button onclick='loadExample("action-body", {"action": "select", "selector": "select[name=country]", "value": "US"})' class="text-sm text-blue-600 underline py-2">Select dropdown</button>
+            <button onclick='loadExample("action-body", {"action": "press", "key": "Enter"})' class="text-sm text-blue-600 underline py-2">Press Enter</button>
+            <button onclick='loadExample("action-body", {"action": "wait", "value": "500"})' class="text-sm text-blue-600 underline py-2">Wait</button>
+          </div>
+          <p class="mt-2 text-xs text-slate-500">Tip: click <strong>List interactive elements</strong> to see tags, text, names and roles for the current page, then use them as selectors.</p>
+        </div>
+
+        <div id="interact-plan" class="interact-content hidden">
+          <div class="mb-2 text-sm text-slate-500">Natural-language action plan <span class="font-mono">/v1/extract</span></div>
+          <label class="block text-sm font-medium mb-1">What do you want to do?</label>
+          <textarea id="interact-goal" rows="3" class="w-full border rounded p-2 font-mono text-sm" placeholder="e.g., find the username field and enter John"></textarea>
+          <div class="mt-2 flex flex-wrap gap-2">
+            <button onclick="useCaseLogin()" class="text-sm bg-slate-500 text-white px-3 py-1 rounded">Login</button>
+            <button onclick="useCaseSearch()" class="text-sm bg-slate-500 text-white px-3 py-1 rounded">Search</button>
+          </div>
+          <div class="mt-2 flex items-center gap-2">
+            <button onclick="generateActionPlan()" class="bg-emerald-600 text-white px-4 py-2 rounded">Generate plan</button>
+            <span class="text-xs text-slate-500">Uses the prefetched elements and the goal to build an action plan via the LLM</span>
+          </div>
+          <pre id="interact-plan-out" class="mt-4 p-3 bg-slate-100 rounded text-sm"></pre>
+          <div id="interact-plan-actions" class="hidden mt-2 text-sm text-slate-500"></div>
+          <button id="interact-plan-execute" onclick="executeActionPlan()" class="hidden mt-2 bg-blue-600 text-white px-4 py-2 rounded">Execute plan</button>
+        </div>
+
+        <div id="interact-close" class="interact-content hidden">
+          <div class="mb-2 text-sm text-slate-500">DELETE <span class="font-mono">/v1/interact/sessions/{session_id}</span></div>
+          <div class="flex items-center gap-2 mb-2">
+            <input id="close-sid" type="text" placeholder="session id" class="sid-input border rounded px-3 py-1 flex-1 font-mono" />
+            <button onclick="pasteSid('close-sid')" class="bg-slate-500 text-white px-3 py-1 rounded text-sm">Paste</button>
+          </div>
+          <button onclick="sendDelete('/v1/interact/sessions/' + sid('close-sid'),'interact-out')" class="bg-blue-600 text-white px-4 py-2 rounded">Close Session</button>
+          <div class="text-xs text-slate-500 mt-1">Step 4: close the browser session</div>
+        </div>
+
+        <pre id="interact-out" class="mt-4 p-3 bg-slate-100 rounded text-sm"></pre>
+        <div id="interact-elements" class="hidden mt-4 p-3 bg-white border rounded text-sm"></div>
+      </section>
+
+      <!-- MCP -->
+      <section id="tab-mcp" class="tab-content hidden">
+        <div class="mb-2 text-sm text-slate-500">POST <span class="font-mono">/mcp</span> (Streamable HTTP MCP)</div>
+        <div class="mb-3 p-3 bg-blue-50 border border-blue-100 rounded text-sm text-slate-700">
+          <strong>MCP call order</strong>
+          <ol class="list-decimal list-inside mt-1 space-y-1">
+            <li><strong>Initialize</strong> — send with <em>no</em> session id. The server creates a session and returns it in the <span class="font-mono">mcp-session-id</span> response header. It is auto-filled below.</li>
+            <li><strong>List tools</strong> — uses the returned session id.</li>
+            <li><strong>Call a tool</strong> — uses the same session id. The tool name and arguments go in the JSON-RPC body.</li>
+          </ol>
+        </div>
+        <div class="mb-3">
+          <label class="block text-sm font-medium mb-1">MCP session id <span id="mcp-status" class="font-normal text-slate-500">— not set; run Initialize first</span></label>
+          <div class="flex items-center gap-2">
+            <input id="mcp-session-id" type="text" class="border rounded px-3 py-1 flex-1 font-mono text-sm" value="" />
+            <button onclick="newMcpSession()" class="bg-slate-500 text-white px-3 py-1 rounded text-sm">Reset / New</button>
+            <button onclick="copyMcpSessionId()" class="bg-slate-500 text-white px-3 py-1 rounded text-sm">Copy</button>
+          </div>
+        </div>
+        <div class="mb-2">
+          <label class="block text-sm font-medium mb-1">JSON-RPC body</label>
+          <textarea id="mcp-body" rows="10" class="w-full border rounded p-2 font-mono text-sm">{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "initialize",
+  "params": {
+    "protocolVersion": "2024-11-05",
+    "capabilities": {},
+    "clientInfo": {
+      "name": "web-research-ui",
+      "version": "0.1.0"
+    }
+  }
+}</textarea>
+        </div>
+        <div class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
+          <div>
+            <label class="block text-sm font-medium mb-1">Tool name</label>
+            <select id="mcp-tool" class="border rounded px-2 py-1 w-full font-mono text-sm">
+              <option value="about">about</option>
+              <option value="search">search</option>
+              <option value="map_site">map_site</option>
+              <option value="scrape">scrape</option>
+              <option value="crawl">crawl</option>
+              <option value="crawl_status">crawl_status</option>
+              <option value="extract">extract</option>
+              <option value="browser_create_session">browser_create_session</option>
+              <option value="browser_navigate">browser_navigate</option>
+              <option value="browser_action">browser_action</option>
+              <option value="browser_text">browser_text</option>
+              <option value="browser_screenshot">browser_screenshot</option>
+              <option value="browser_close_session">browser_close_session</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Parameters (JSON)</label>
+            <textarea id="mcp-tool-params" rows="4" class="w-full border rounded p-2 font-mono text-sm" placeholder='{ "query": "Royal Caribbean Alaska" }'></textarea>
+          </div>
+        </div>
+        <div class="mt-2 flex items-center gap-2">
+          <button onclick="buildMcpToolCall()" class="bg-emerald-600 text-white px-4 py-2 rounded">Build call</button>
+          <button onclick="sendMcp()" class="bg-blue-600 text-white px-4 py-2 rounded">Send</button>
+          <span id="mcp-step-hint" class="text-xs text-slate-500">Step 1: send Initialize to get a session id</span>
+        </div>
+        <div class="mt-2 flex flex-wrap gap-2">
+          <button id="mcp-step-1" onclick="loadMcpStep(1)" class="text-sm px-3 py-1 rounded bg-blue-100 text-blue-700 disabled:bg-slate-200 disabled:text-slate-500 disabled:opacity-60 disabled:cursor-not-allowed transition">1. Initialize</button>
+          <button id="mcp-step-2" onclick="loadMcpStep(2)" class="text-sm px-3 py-1 rounded bg-blue-100 text-blue-700 disabled:bg-slate-200 disabled:text-slate-500 disabled:opacity-60 disabled:cursor-not-allowed transition" disabled>2. List tools</button>
+          <button id="mcp-step-3" onclick="loadMcpStep(3)" class="text-sm px-3 py-1 rounded bg-blue-100 text-blue-700 disabled:bg-slate-200 disabled:text-slate-500 disabled:opacity-60 disabled:cursor-not-allowed transition" disabled>3. Call tool</button>
+        </div>
+        <div class="mt-2 flex items-center gap-2">
+          <label class="text-sm text-slate-600 flex items-center gap-1">
+            <input type="checkbox" id="mcp-pretty" checked onchange="renderMcpOutput()" /> Pretty print JSON
+          </label>
+        </div>
+        <pre id="mcp-out" class="mt-4 p-3 bg-slate-100 rounded text-sm"></pre>
+        <div class="mt-2 flex items-center gap-2">
+          <button onclick="copyMcpResult()" class="bg-slate-500 text-white px-3 py-1 rounded text-sm">Copy response</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const SAMPLE_URLS = [
+      'https://www.princess.com',
+      'https://www.royalcaribbean.com',
+      'https://www.carnival.com',
+      'https://www.hollandamerica.com',
+      'https://www.ncl.com',
+      'https://www.celebritycruises.com'
+    ];
+    function sampleUrl() { return SAMPLE_URLS[Math.floor(Math.random() * SAMPLE_URLS.length)]; }
+
+    const mainTabs = [
+      { id: 'scrape', label: 'Scrape' },
+      { id: 'map', label: 'Map' },
+      { id: 'crawl', label: 'Crawl' },
+      { id: 'search', label: 'Search' },
+      { id: 'extract', label: 'Extract' },
+      { id: 'interact', label: 'Interact' },
+      { id: 'mcp', label: 'MCP' },
+    ];
+    const interactTabs = [
+      { id: 'create', label: 'Create' },
+      { id: 'navigate', label: 'Navigate' },
+      { id: 'text', label: 'Text' },
+      { id: 'screenshot', label: 'Screenshot' },
+      { id: 'action', label: 'Action' },
+      { id: 'plan', label: 'Plan' },
+      { id: 'close', label: 'Close' },
+    ];
+    let currentTab = 'scrape';
+    let mcpLastData = null;
+    let mcpStep = 0;
+
+    function interactStepForId(id) {
+      if (id === 'create') return 0;
+      if (id === 'navigate') return 1;
+      if (['text', 'screenshot', 'close'].includes(id)) return 1;
+      return 2; // action, plan
+    }
+
+    function updateInteractButtons() {
+      interactTabs.forEach(t => {
+        const b = document.getElementById('i-btn-' + t.id);
+        if (b) b.disabled = interactStepForId(t.id) > interactStep;
+      });
+    }
+
+    function updateInteractStatus() {
+      const el = document.getElementById('interact-status');
+      if (!el) return;
+      if (interactStep === 0) {
+        el.textContent = '— no session; create one first';
+        el.className = 'text-slate-500';
+      } else if (interactStep === 1) {
+        el.textContent = '— session created; navigate to a URL';
+        el.className = 'text-emerald-600';
+      } else {
+        el.textContent = '— ready for text, screenshot, action, or close';
+        el.className = 'text-emerald-600';
+      }
+    }
+
+    function buildTabs() {
+      const nav = document.getElementById('main-tabs');
+      nav.innerHTML = mainTabs.map(t =>
+        `<button id="btn-${t.id}" class="px-4 py-2 whitespace-nowrap ${t.id === currentTab ? 'tab-active' : 'text-slate-500'}" onclick="showTab('${t.id}')">${t.label}</button>`
+      ).join('');
+
+      const iNav = document.getElementById('interact-tabs');
+      iNav.innerHTML = interactTabs.map(t => {
+        const active = t.id === 'create' ? 'subtab-active' : 'text-slate-600';
+        const disabled = interactStepForId(t.id) > interactStep ? 'disabled' : '';
+        return `<button id="i-btn-${t.id}" class="px-3 py-1 rounded text-sm ${active} disabled:bg-slate-200 disabled:text-slate-500 disabled:opacity-60 disabled:cursor-not-allowed transition" ${disabled} onclick="showInteract('${t.id}')">${t.label}</button>`;
+      }).join('');
+    }
+
+    function showTab(id) {
+      currentTab = id;
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.getElementById('tab-' + id).classList.remove('hidden');
+      buildTabs();
+    }
+
+    function showInteract(id) {
+      if (interactStepForId(id) > interactStep) return;
+      document.querySelectorAll('.interact-content').forEach(el => el.classList.add('hidden'));
+      document.getElementById('interact-' + id).classList.remove('hidden');
+      interactTabs.forEach(t => {
+        const b = document.getElementById('i-btn-' + t.id);
+        if (b) b.className = 'px-3 py-1 rounded text-sm ' + (t.id === id ? 'subtab-active' : 'text-slate-600');
+      });
+    }
+
+    function apiKey() { return window.GATEWAY_API_KEY || document.getElementById('api-key').value; }
+    function url(path) { return window.location.origin + path; }
+    function sid(inputId) { return document.getElementById(inputId).value.trim(); }
+
+    let __sid__ = '';
+    let interactStep = 0;
+    let interactElements = [];
+    let interactPlan = null;
+
+    function fillSidInputs() {
+      if (!__sid__) return;
+      document.querySelectorAll('.sid-input').forEach(el => { if (!el.value.trim()) el.value = __sid__; });
+    }
+
+    function copyCurrentSid() {
+      if (!__sid__) return;
+      navigator.clipboard.writeText(__sid__);
+    }
+
+    async function pasteSid(inputId) {
+      const input = document.getElementById(inputId);
+      try {
+        input.value = (await navigator.clipboard.readText()).trim();
+      } catch (e) {
+        document.getElementById('interact-out').textContent = `Paste failed: ${e.message}`;
+      }
+    }
+
+    async function createSession() {
+      const out = document.getElementById('interact-out');
+      out.textContent = 'Creating...';
+      try {
+        const res = await fetch(url('/v1/interact/sessions'), {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + apiKey(), 'Content-Type': 'application/json' },
+          body: '{}'
+        });
+        const j = await res.json();
+        if (!res.ok) {
+          out.textContent = `HTTP ${res.status}\n\n${JSON.stringify(j, null, 2)}`;
+          return;
+        }
+        __sid__ = j.session_id || '';
+        document.getElementById('current-sid').value = __sid__;
+        document.getElementById('sid-copy-row').classList.remove('hidden');
+        fillSidInputs();
+        interactStep = 1;
+        updateInteractStatus();
+        updateInteractButtons();
+        out.textContent = `HTTP ${res.status}\n\n${JSON.stringify(j, null, 2)}`;
+      } catch (e) {
+        out.textContent = `Error: ${e.message}`;
+      }
+    }
+
+    function interactPathStep(path, method) {
+      if (method === 'DELETE' && /^\/v1\/interact\/sessions\/[^/]+$/.test(path)) return 'close';
+      if (path.includes('/navigate')) return 2;
+      if (path.includes('/text') || path.includes('/screenshot') || path.includes('/action') || path.includes('/elements')) return 3;
+      return null;
+    }
+
+    function resetInteractSession() {
+      __sid__ = '';
+      interactStep = 0;
+      document.getElementById('current-sid').value = '';
+      document.getElementById('sid-copy-row').classList.add('hidden');
+      document.querySelectorAll('.sid-input').forEach(el => el.value = '');
+      updateInteractStatus();
+      updateInteractButtons();
+    }
+
+    async function handle(path, init, outId) {
+      const out = document.getElementById(outId);
+      out.textContent = 'Sending...';
+      try {
+        const res = await fetch(url(path), init);
+        const contentType = res.headers.get('content-type') || '';
+        let body;
+        if (contentType.includes('image/png')) {
+          body = '[binary PNG data]';
+        } else if (contentType.includes('application/json')) {
+          const j = await res.json();
+          body = JSON.stringify(j, null, 2);
+        } else {
+          body = await res.text();
+        }
+        out.textContent = `HTTP ${res.status}\n\n${body}`;
+        if (outId === 'interact-out' && res.ok) {
+          const step = interactPathStep(path, init.method || 'GET');
+          if (step === 'close') {
+            resetInteractSession();
+          } else if (typeof step === 'number') {
+            interactStep = Math.max(interactStep, step);
+            updateInteractStatus();
+            updateInteractButtons();
+          }
+        }
+      } catch (e) {
+        out.textContent = `Network error: ${e.message}`;
+      }
+    }
+
+    function sendGet(path, outId) {
+      handle(path, { headers: { 'Authorization': 'Bearer ' + apiKey() } }, outId);
+    }
+
+    function sendDelete(path, outId) {
+      handle(path, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + apiKey() } }, outId);
+    }
+
+    function sendPost(path, bodyId, outId) {
+      const body = document.getElementById(bodyId).value;
+      handle(path, {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + apiKey(),
+          'Content-Type': 'application/json'
+        },
+        body: body
+      }, outId);
+    }
+
+    function sendPostDyn(path, bodyId, outId) {
+      if (!path.includes('//')) {
+        return sendPost(path, bodyId, outId);
+      }
+      const out = document.getElementById(outId);
+      out.textContent = 'Missing session id';
+    }
+
+    async function startCrawl() {
+      const out = document.getElementById('crawl-out');
+      out.textContent = 'Sending...';
+      const body = document.getElementById('crawl-body').value;
+      try {
+        const res = await fetch(url('/v1/crawl'), {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + apiKey(), 'Content-Type': 'application/json' },
+          body: body
+        });
+        const j = await res.json();
+        const job = j.id || j.jobId || (j.data && j.data.id) || '';
+        document.getElementById('crawl-job').value = job;
+        out.textContent = `HTTP ${res.status}\n\n${JSON.stringify(j, null, 2)}`;
+      } catch (e) {
+        out.textContent = `Error: ${e.message}`;
+      }
+    }
+
+    function checkCrawl() {
+      const job = document.getElementById('crawl-job').value.trim();
+      if (!job) return;
+      sendGet('/v1/crawl/' + encodeURIComponent(job), 'crawl-out');
+    }
+
+    async function fetchScreenshot() {
+      const sid = document.getElementById('screenshot-sid').value.trim();
+      const out = document.getElementById('interact-out');
+      if (!sid) { out.textContent = 'Missing session id'; return; }
+      const container = document.getElementById('screenshot-out');
+      container.innerHTML = '';
+      out.textContent = 'Fetching screenshot...';
+      try {
+        const res = await fetch(url('/v1/interact/sessions/' + encodeURIComponent(sid) + '/screenshot'), {
+          headers: { 'Authorization': 'Bearer ' + apiKey() }
+        });
+        const contentType = res.headers.get('content-type') || '';
+        if (!res.ok || !contentType.includes('image/png')) {
+          const body = await res.text();
+          out.textContent = `HTTP ${res.status} (${contentType})\n\n${body}`;
+          return;
+        }
+        const blob = await res.blob();
+        if (blob.size === 0) {
+          out.textContent = 'Screenshot returned an empty image.';
+          return;
+        }
+        interactStep = Math.max(interactStep, 3);
+        updateInteractStatus();
+        updateInteractButtons();
+        const img = document.createElement('img');
+        img.className = 'mt-4 border rounded max-w-full block bg-slate-100 p-1';
+        img.alt = 'Screenshot';
+        img.src = URL.createObjectURL(blob);
+        img.onerror = () => { out.textContent = 'Failed to render screenshot image.'; };
+        img.onload = () => { out.textContent = `Screenshot loaded (${blob.size} bytes, ${img.naturalWidth}x${img.naturalHeight})`; };
+        container.appendChild(img);
+      } catch (e) {
+        out.textContent = `Error: ${e.message}`;
+      }
+    }
+
+    async function preQueryUrl() {
+      const out = document.getElementById('interact-out');
+      let body;
+      try { body = JSON.parse(document.getElementById('navigate-body').value); } catch (_) { out.textContent = 'Invalid navigate JSON body'; return; }
+      if (!body.url) { out.textContent = 'URL is required in the navigate body'; return; }
+      out.textContent = 'Pre-querying: creating session...';
+      try {
+        const createRes = await fetch(url('/v1/interact/sessions'), {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + apiKey(), 'Content-Type': 'application/json' },
+          body: '{}'
+        });
+        const createJson = await createRes.json();
+        if (!createRes.ok) { out.textContent = `HTTP ${createRes.status}\n\n${JSON.stringify(createJson, null, 2)}`; return; }
+        __sid__ = createJson.session_id || '';
+        document.getElementById('current-sid').value = __sid__;
+        document.getElementById('sid-copy-row').classList.remove('hidden');
+        fillSidInputs();
+        interactStep = 1;
+        updateInteractStatus();
+        updateInteractButtons();
+        out.textContent = `Session created. Navigating to ${body.url}...`;
+        const navRes = await fetch(url('/v1/interact/sessions/' + encodeURIComponent(__sid__) + '/navigate'), {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + apiKey(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: body.url, wait_until: body.wait_until || 'domcontentloaded' })
+        });
+        const navJson = await navRes.json();
+        if (!navRes.ok) { out.textContent = `HTTP ${navRes.status}\n\n${JSON.stringify(navJson, null, 2)}`; return; }
+        interactStep = 2;
+        updateInteractStatus();
+        updateInteractButtons();
+        out.textContent = 'Navigated. Fetching interactive elements...';
+        const elRes = await fetch(url('/v1/interact/sessions/' + encodeURIComponent(__sid__) + '/elements'), {
+          headers: { 'Authorization': 'Bearer ' + apiKey() }
+        });
+        const elJson = await elRes.json();
+        if (!elRes.ok) { out.textContent = `HTTP ${elRes.status}\n\n${JSON.stringify(elJson, null, 2)}`; return; }
+        interactStep = 3;
+        updateInteractStatus();
+        updateInteractButtons();
+        interactElements = Array.isArray(elJson) ? elJson : (elJson.elements || []);
+        out.textContent = `HTTP ${elRes.status}\n\nFound ${interactElements.length} interactive elements. Use the list below to build an action.`;
+        renderInteractiveElements(interactElements);
+      } catch (e) {
+        out.textContent = `Error: ${e.message}`;
+      }
+    }
+
+    function renderInteractiveElements(data) {
+      const container = document.getElementById('interact-elements');
+      const list = Array.isArray(data) ? data : ((data && Array.isArray(data.elements)) ? data.elements : []);
+      container.textContent = '';
+      container.classList.remove('hidden');
+      if (!list.length) {
+        container.textContent = 'No interactive elements found.';
+        return;
+      }
+      const header = document.createElement('div');
+      header.className = 'mb-2 font-medium';
+      header.textContent = `Interactive elements found (${list.length})`;
+      const clear = document.createElement('button');
+      clear.className = 'text-sm text-red-600 underline mb-2';
+      clear.textContent = 'Clear list';
+      clear.onclick = () => { container.textContent = ''; container.classList.add('hidden'); };
+      const listDiv = document.createElement('div');
+      listDiv.className = 'space-y-2';
+      list.forEach((el, i) => {
+        const row = document.createElement('div');
+        row.className = 'flex items-center gap-2 p-2 border rounded';
+        const label = document.createElement('span');
+        label.className = 'flex-1 font-mono';
+        const tag = el.tag || el.node || 'element';
+        const text = String(el.text || el.name || el.description || el.id || el.ariaLabel || el.value || '').slice(0, 60);
+        label.textContent = `${i + 1}. ${tag}${text ? ': ' + text : ''}`;
+        const click = document.createElement('button');
+        click.className = 'text-xs bg-blue-600 text-white px-2 py-1 rounded';
+        click.textContent = 'Click';
+        click.onclick = () => prepareElementAction('click', el);
+        const type = document.createElement('button');
+        type.className = 'text-xs bg-emerald-600 text-white px-2 py-1 rounded';
+        type.textContent = 'Type';
+        type.onclick = () => prepareElementAction('type', el);
+        const sel = document.createElement('button');
+        sel.className = 'text-xs bg-slate-600 text-white px-2 py-1 rounded';
+        sel.textContent = 'Select';
+        sel.onclick = () => prepareElementAction('select', el);
+        row.appendChild(label);
+        row.appendChild(click);
+        row.appendChild(type);
+        row.appendChild(sel);
+        listDiv.appendChild(row);
+      });
+      container.appendChild(header);
+      container.appendChild(clear);
+      container.appendChild(listDiv);
+    }
+
+    function prepareElementAction(action, el) {
+      const description = String(el.text || el.name || el.description || el.id || el.ariaLabel || '');
+      const payload = { action };
+      if (el.selector && typeof el.selector === 'string') payload.selector = el.selector;
+      else if (description) payload.description = description;
+      if (action === 'type' || action === 'select') {
+        const value = window.prompt(action === 'type' ? 'Text to type' : 'Option value to select');
+        if (value === null) return;
+        payload.value = value;
+      }
+      document.getElementById('action-body').value = JSON.stringify(payload, null, 2);
+      showInteract('action');
+    }
+
+    async function generateActionPlan() {
+      const out = document.getElementById('interact-plan-out');
+      const goal = document.getElementById('interact-goal').value.trim();
+      if (!goal) { out.textContent = 'Enter a goal first'; return; }
+      if (!__sid__) { out.textContent = 'Create or pre-query a session first'; return; }
+      if (!interactElements.length) { out.textContent = 'Pre-query interactive elements first'; return; }
+      out.textContent = 'Generating plan via LLM...';
+      const content = JSON.stringify(interactElements.map(e => ({
+        tag: e.tag,
+        text: e.text,
+        name: e.name,
+        role: e.role,
+        selector: e.selector,
+        description: e.description
+      })));
+      const schema = {
+        type: 'object',
+        properties: {
+          actions: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                method: { type: 'string' },
+                path: { type: 'string' },
+                body: { type: 'object' },
+                description: { type: 'string' }
+              },
+              required: ['method', 'path', 'body', 'description'],
+              additionalProperties: false
+            }
+          }
+        },
+        required: ['actions'],
+        additionalProperties: false
+      };
+      const instruction = `You are driving a Playwright browser session. The user wants to: ${goal}. Below is a JSON list of interactive elements on the current page. Return a JSON plan with the fewest HTTP calls needed to accomplish the goal. Use {session_id} as the session id placeholder. Available paths: /v1/interact/sessions/{session_id}/action (POST) for click/type/select/press/wait, /v1/interact/sessions/{session_id}/text (GET) to read text, /v1/interact/sessions/{session_id}/screenshot (GET) to capture screenshot. Each action body should be the JSON body for that endpoint.`;
+      try {
+        const res = await fetch(url('/v1/extract'), {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + apiKey(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content, instruction, schema, max_retries: 2 })
+        });
+        const j = await res.json();
+        if (!res.ok) { out.textContent = `HTTP ${res.status}\n\n${JSON.stringify(j, null, 2)}`; return; }
+        interactPlan = j.data || null;
+        renderActionPlan();
+      } catch (e) {
+        out.textContent = `Error: ${e.message}`;
+      }
+    }
+
+    function renderActionPlan() {
+      const out = document.getElementById('interact-plan-out');
+      const actionsDiv = document.getElementById('interact-plan-actions');
+      const execBtn = document.getElementById('interact-plan-execute');
+      if (!interactPlan || !interactPlan.actions) { out.textContent = 'No plan generated'; return; }
+      out.textContent = JSON.stringify(interactPlan, null, 2);
+      actionsDiv.textContent = `${interactPlan.actions.length} action(s) ready`;
+      actionsDiv.classList.remove('hidden');
+      execBtn.classList.remove('hidden');
+    }
+
+    async function executeActionPlan() {
+      const out = document.getElementById('interact-out');
+      if (!interactPlan || !interactPlan.actions || !interactPlan.actions.length) { out.textContent = 'No plan to execute'; return; }
+      if (!__sid__) { out.textContent = 'No session id'; return; }
+      out.textContent = 'Executing plan...';
+      for (let i = 0; i < interactPlan.actions.length; i++) {
+        const a = interactPlan.actions[i];
+        const method = (a.method || 'POST').toUpperCase();
+        let path = a.path || '';
+        path = path.replace(/{session_id}/g, encodeURIComponent(__sid__)).replace(/{sid}/g, encodeURIComponent(__sid__));
+        if (!path.startsWith('/v1/interact/')) {
+          out.textContent += `\n\nStep ${i + 1}: SKIPPED (invalid path: ${path})`;
+          continue;
+        }
+        if (!path.startsWith('/')) path = '/' + path;
+        out.textContent += `\n\nStep ${i + 1}: ${a.description || method + ' ' + path}`;
+        try {
+          const init = { headers: { 'Authorization': 'Bearer ' + apiKey() } };
+          if (method === 'POST' || method === 'PUT' || method === 'PATCH') {
+            init.method = method;
+            init.headers['Content-Type'] = 'application/json';
+            init.body = JSON.stringify(a.body || {});
+          } else {
+            init.method = method;
+          }
+          const res = await fetch(url(path), init);
+          let body;
+          const ct = res.headers.get('content-type') || '';
+          if (ct.includes('application/json')) body = await res.json();
+          else if (ct.includes('image/png')) body = '[binary PNG data]';
+          else body = await res.text();
+          out.textContent += `\nHTTP ${res.status}:\n${typeof body === 'object' ? JSON.stringify(body, null, 2) : body}`;
+        } catch (e) {
+          out.textContent += `\nError: ${e.message}`;
+        }
+      }
+    }
+
+    function useCaseLogin() {
+      const username = window.prompt('Username');
+      if (username === null) return;
+      const password = window.prompt('Password');
+      if (password === null) return;
+      document.getElementById('interact-goal').value = `Log in with username "${username}" and password "${password}", then submit the login form.`;
+      generateActionPlan();
+    }
+
+    function useCaseSearch() {
+      const query = window.prompt('Search query');
+      if (query === null) return;
+      document.getElementById('interact-goal').value = `Enter "${query}" into the search field and press Enter or click submit.`;
+      generateActionPlan();
+    }
+
+    async function suggestInstruction() {
+      const u = document.getElementById('schema-url').value.trim();
+      if (!u) { alert('Enter a URL first'); return; }
+      const out = document.getElementById('extract-out');
+      out.textContent = 'Scraping page and suggesting instruction...';
+      try {
+        const res = await fetch(url('/v1/extract/instruction-suggest'), {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + apiKey(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: u })
+        });
+        const body = await res.json();
+        if (!res.ok) {
+          out.textContent = `HTTP ${res.status}\n\n${JSON.stringify(body, null, 2)}`;
+          return;
+        }
+        document.getElementById('schema-instruction').value = body.instruction;
+        out.textContent = 'Suggested instruction: ' + body.instruction;
+      } catch (e) {
+        out.textContent = `Error: ${e.message}`;
+      }
+    }
+
+    function refreshSchemaUrl() {
+      const u = sampleUrl();
+      document.getElementById('schema-url').value = u;
+      const area = document.getElementById('extract-body');
+      let current = {};
+      try { current = JSON.parse(area.value); } catch (e) { current = {}; }
+      current.url = u;
+      area.value = JSON.stringify(current, null, 2);
+    }
+
+    async function generateSchema() {
+      const u = document.getElementById('schema-url').value.trim();
+      const instruction = document.getElementById('schema-instruction').value.trim();
+      if (!u) { alert('Enter a URL first'); return; }
+      if (!instruction) { alert('Enter an instruction first'); return; }
+      const out = document.getElementById('extract-out');
+      out.textContent = 'Scraping URL and generating schema...';
+      try {
+        const res = await fetch(url('/v1/extract/schema-suggest'), {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + apiKey(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: u, instruction })
+        });
+        const body = await res.json();
+        if (!res.ok) {
+          out.textContent = `HTTP ${res.status}\n\n${JSON.stringify(body, null, 2)}`;
+          return;
+        }
+        const area = document.getElementById('extract-body');
+        let current = {};
+        try { current = JSON.parse(area.value); } catch (e) { current = { url: u }; }
+        current.url = u;
+        current.instruction = instruction;
+        current.schema = body.schema;
+        area.value = JSON.stringify(current, null, 2);
+        out.textContent = 'Schema generated and inserted into the JSON body above.';
+      } catch (e) {
+        out.textContent = `Error: ${e.message}`;
+      }
+    }
+
+    function loadExample(areaId, payload) {
+      document.getElementById(areaId).value = JSON.stringify(payload, null, 2);
+    }
+
+    function loadExtractExample(type) {
+      const area = document.getElementById('extract-body');
+      if (type === 'content') {
+        area.value = JSON.stringify({
+          content: 'Acme Example Corp was founded in 1999 and is headquartered in Vancouver.',
+          instruction: 'Extract the company name, founding year, and city.',
+          schema: {
+            type: 'object',
+            properties: { company: { type: 'string' }, year: { type: 'integer' }, city: { type: 'string' } },
+            required: ['company', 'year', 'city']
+          }
+        }, null, 2);
+      } else {
+        area.value = JSON.stringify({
+          url: sampleUrl(),
+          schema: { type: 'object', properties: { title: { type: 'string' } }, required: ['title'] }
+        }, null, 2);
+      }
+    }
+
+    async function pollHealth() {
+      const container = document.getElementById('health-indicators');
+      try {
+        const res = await fetch(url('/health'), { headers: { 'Authorization': 'Bearer ' + apiKey() } });
+        if (!res.ok) {
+          container.innerHTML = '<span class="text-red-600">Gateway down</span>';
+          return;
+        }
+        const data = await res.json();
+        const services = data.services || {};
+        const html = Object.entries(services).map(([name, ok]) => {
+          const color = ok ? 'bg-emerald-500' : 'bg-red-500';
+          return `<span class="flex items-center gap-1" title="${name}: ${ok ? 'ok' : 'down'}"><span class="inline-block w-2 h-2 rounded-full ${color}"></span><span class="capitalize">${name}</span></span>`;
+        }).join('');
+        container.innerHTML = html || '<span class="text-slate-500">No services</span>';
+      } catch (e) {
+        container.innerHTML = '<span class="text-red-600">Health check failed</span>';
+      }
+    }
+    function updateMcpStatus() {
+      const sid = document.getElementById('mcp-session-id').value;
+      const status = document.getElementById('mcp-status');
+      if (sid) {
+        status.textContent = '— session set; ready for List tools / Call tool';
+        status.className = 'font-normal text-emerald-600';
+        document.getElementById('mcp-step-hint').textContent = 'Step 2 or 3: load a step and click Send';
+      } else {
+        status.textContent = '— not set; run Initialize first';
+        status.className = 'font-normal text-slate-500';
+        document.getElementById('mcp-step-hint').textContent = 'Step 1: send Initialize to get a session id';
+      }
+    }
+
+    function updateMcpButtons() {
+      const btn2 = document.getElementById('mcp-step-2');
+      const btn3 = document.getElementById('mcp-step-3');
+      const btn4 = document.getElementById('mcp-step-4');
+      if (btn2) btn2.disabled = mcpStep < 1;
+      if (btn3) btn3.disabled = mcpStep < 2;
+      if (btn4) btn4.disabled = mcpStep < 2;
+    }
+
+    function mcpLastJson() {
+      if (!mcpLastData) return null;
+      const m = mcpLastData.text.match(/data: (.*)/s);
+      if (m) {
+        try { return JSON.parse(m[1]); } catch (_) {}
+      }
+      try { return JSON.parse(mcpLastData.text); } catch (_) {}
+      return null;
+    }
+
+    const MCP_STEPS = {
+      1: { id: 1, method: 'initialize', body: { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'web-research-ui', version: '0.1.0' } } }, hint: 'Step 1: send Initialize (no session id needed)' },
+      2: { id: 2, method: 'tools/list', body: { jsonrpc: '2.0', id: 2, method: 'tools/list' }, hint: 'Step 2: send List tools with the session id' },
+      3: { id: 3, method: 'tools/call', body: { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: '', arguments: {} } }, hint: 'Step 3: choose a tool, enter parameters, Build call, then Send' }
+    };
+
+    function loadMcpStep(step) {
+      const s = MCP_STEPS[step];
+      if (!s) return;
+      document.getElementById('mcp-body').value = JSON.stringify(s.body, null, 2);
+      document.getElementById('mcp-step-hint').textContent = s.hint;
+      if (step === 1) {
+        document.getElementById('mcp-session-id').value = '';
+        mcpStep = 0;
+        mcpLastData = null;
+        renderMcpOutput();
+        updateMcpButtons();
+      }
+      updateMcpStatus();
+    }
+
+    function formatMcpOutput(text, pretty) {
+      if (text.includes('data: ')) {
+        return text.split(/\r?\n/).map(line => {
+          if (line.startsWith('data: ')) {
+            const p = line.slice(6);
+            try { const j = JSON.parse(p); return 'data: ' + JSON.stringify(j, null, pretty ? 2 : null); }
+            catch (_) { return line; }
+          }
+          return line;
+        }).join('\n');
+      }
+      try { const j = JSON.parse(text); return JSON.stringify(j, null, pretty ? 2 : null); }
+      catch (_) { return text; }
+    }
+
+    function renderMcpOutput() {
+      const out = document.getElementById('mcp-out');
+      if (!mcpLastData) { out.textContent = ''; return; }
+      const pretty = document.getElementById('mcp-pretty')?.checked ?? true;
+      out.textContent = mcpLastData.status + formatMcpOutput(mcpLastData.text, pretty);
+    }
+
+    function buildMcpToolCall() {
+      const name = document.getElementById('mcp-tool').value;
+      const raw = document.getElementById('mcp-tool-params').value.trim();
+      let args = {};
+      if (raw) {
+        try { args = JSON.parse(raw); }
+        catch (e) { document.getElementById('mcp-out').textContent = 'Invalid parameters JSON: ' + e.message; return; }
+      }
+      const body = { jsonrpc: '2.0', id: Date.now(), method: 'tools/call', params: { name, arguments: args } };
+      document.getElementById('mcp-body').value = JSON.stringify(body, null, 2);
+      document.getElementById('mcp-step-hint').textContent = 'Step 3: review the JSON-RPC body and click Send';
+    }
+
+    async function sendMcp() {
+      const body = document.getElementById('mcp-body').value;
+      const out = document.getElementById('mcp-out');
+      const sidInput = document.getElementById('mcp-session-id');
+      let method = '';
+      try { method = JSON.parse(body).method || ''; } catch (_) {}
+      const isInit = method === 'initialize';
+      const headers = {
+        'Authorization': 'Bearer ' + apiKey(),
+        'Content-Type': 'application/json'
+      };
+      if (!isInit) {
+        const sid = sidInput.value.trim();
+        if (!sid) { out.textContent = 'Run Step 1 (Initialize) to get an MCP session id.'; return; }
+        headers['Mcp-Session-Id'] = sid;
+      }
+      out.textContent = 'Sending...';
+      mcpLastData = null;
+      try {
+        const res = await fetch(url('/mcp'), {
+          method: 'POST',
+          headers: headers,
+          body: body
+        });
+        const text = await res.text();
+        const returnedSid = res.headers.get('mcp-session-id') || '(none)';
+        mcpLastData = { status: `HTTP ${res.status}\nMcp-Session-Id: ${returnedSid}\n\n`, text };
+        renderMcpOutput();
+        const j = mcpLastJson();
+        if (j && !j.error) {
+          if (method === 'initialize') mcpStep = Math.max(mcpStep, 1);
+          else if (method === 'tools/list') mcpStep = Math.max(mcpStep, 2);
+          else if (method === 'tools/call') mcpStep = Math.max(mcpStep, 3);
+          updateMcpButtons();
+        }
+        if (isInit && returnedSid !== '(none)') {
+          sidInput.value = returnedSid;
+        }
+      } catch (e) {
+        out.textContent = `Error: ${e.message}`;
+      }
+      updateMcpStatus();
+    }
+
+    function copyMcpResult() {
+      const text = document.getElementById('mcp-out').textContent;
+      if (!text) return;
+      navigator.clipboard.writeText(text);
+    }
+
+    function copyMcpSessionId() {
+      const sid = document.getElementById('mcp-session-id').value;
+      if (sid) {
+        navigator.clipboard.writeText(sid);
+      } else {
+        document.getElementById('mcp-out').textContent += '\n\n[No MCP session id to copy]';
+      }
+    }
+
+    function newMcpSession() {
+      mcpStep = 0;
+      mcpLastData = null;
+      loadMcpStep(1);
+      updateMcpButtons();
+    }
+
+    setInterval(pollHealth, 5000);
+
+    buildTabs();
+    showTab('scrape');
+    showInteract('create');
+    updateMcpStatus();
+    updateMcpButtons();
+    updateInteractStatus();
+    updateInteractButtons();
+    pollHealth();
+  </script>
+</body>
+</html>

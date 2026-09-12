@@ -21,7 +21,7 @@ class OptionalApiKeyMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         expected = os.getenv(self.env_var, "").strip()
-        if expected and request.url.path not in {"/health", "/docs", "/openapi.json"}:
+        if expected and request.url.path not in {"/health", "/docs", "/openapi.json"} and not request.url.path.startswith("/ui"):
             supplied = request.headers.get("authorization", "")
             if supplied.startswith("Bearer "):
                 supplied = supplied[7:]

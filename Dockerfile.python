@@ -14,6 +14,7 @@ COPY mcp /app/mcp_server
 COPY interact/__init__.py /app/interact/__init__.py
 COPY interact/security.py /app/interact/security.py
 COPY tests /app/tests
+COPY ui /app/ui
 
 RUN useradd --create-home --uid 10001 appuser && chown -R appuser:appuser /app
 USER appuser

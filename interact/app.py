@@ -291,3 +291,9 @@ async def screenshot(session_id: str):
     page = _get(session_id).page
     png = await page.screenshot(full_page=True, type="png")
     return Response(content=png, media_type="image/png")
+
+
+@app.get("/v1/sessions/{session_id}/elements")
+async def elements(session_id: str):
+    page = _get(session_id).page
+    return {"url": page.url, "title": await page.title(), "elements": await _interactive_candidates(page)}
