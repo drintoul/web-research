@@ -372,23 +372,14 @@ curl -sS "$WRS/v1/crawl/$JOB_ID" \
 
 The gateway first scrapes the page through Firecrawl and then sends the resulting content to the dedicated Ollama extraction service.
 
-```text
-URL
- |
- v
-Firecrawl scrape
- |
- v
-markdown
- |
- v
-Extract service
- |
- v
-existing Ollama endpoint
- |
- v
-JSON Schema validation + bounded retry
+```mermaid
+flowchart TD
+    A[URL] --> B[Firecrawl scrape]
+    B --> C[markdown]
+    C --> D[Extract service]
+    D --> E[Ollama]
+    E --> F[JSON Schema validation + bounded retry]
+    F --> G[Structured JSON]
 ```
 
 Example:
@@ -1414,22 +1405,22 @@ or:
 
 The script executes a FastMCP client from inside the running MCP container. It connects to the real Streamable HTTP endpoint, performs MCP initialization, lists tools, verifies that all expected tools are exposed, and calls the `about` tool.
 
-Expected tools include:
-
-```text
-about
-search
-map_site
-scrape
-crawl
-crawl_status
-extract
-browser_create_session
-browser_navigate
-browser_action
-browser_text
-browser_screenshot
-browser_close_session
+```mermaid
+%%{init: {'theme': 'default', 'flowchart': {'useMaxWidth': true}}}%%
+flowchart LR
+    A[Discovery] --> B[about]
+    A --> C[search]
+    A --> D[map_site]
+    E[Content] --> F[scrape]
+    E --> G[crawl]
+    E --> H[crawl_status]
+    E --> I[extract]
+    J[Browser] --> K[create_session]
+    J --> L[navigate]
+    J --> M[action]
+    J --> N[text]
+    J --> O[screenshot]
+    J --> P[close_session]
 ```
 
 ## Live endpoint regression
@@ -1487,16 +1478,18 @@ Before exposing the stack outside a trusted host/network:
 
 Once running, you have a single self-hosted web-research layer with both REST and MCP access:
 
-```text
-                  Web Research Stack
-                         |
-      +------------------+------------------+
-      |                  |                  |
-   Discovery          Content          Interaction
-      |                  |                  |
- search/map       scrape/crawl/extract     browser
-      |                  |                  |
-   SearXNG        Firecrawl + Ollama     Playwright
+```mermaid
+%%{init: {'theme': 'default', 'flowchart': {'useMaxWidth': true}}}%%
+flowchart TD
+    A[Web Research Stack] --> B[Discovery]
+    A --> C[Content]
+    A --> D[Interaction]
+    B --> E[search · map]
+    C --> F[scrape · crawl · extract]
+    D --> G[browser]
+    E --> H[(SearXNG)]
+    F --> I[(Firecrawl + Ollama)]
+    G --> J[(Playwright)]
 ```
 
 Application code can therefore depend on the **Web Research Stack contract** rather than directly on Firecrawl, SearXNG, Ollama, or Playwright.
