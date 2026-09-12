@@ -21,19 +21,31 @@ The stack deliberately combines several specialized services rather than trying 
 ## Architecture
 
 ```mermaid
+%%{init: {'theme': 'default', 'flowchart': {'useMaxWidth': true, 'htmlLabels': true}}}%%
 flowchart TD
-    A[Applications / LangGraph / Agents] --> B[REST API<br/>http://127.0.0.1:8084]
-    A --> C[MCP Server<br/>http://127.0.0.1:8083/mcp]
-    B --> D[Unified Gateway API]
+    A[Applications / Agents]
+    B[REST API<br/>:8084]
+    C[MCP Server<br/>:8083]
+    D[Unified Gateway]
+    E[Firecrawl<br/>search · map · scrape · crawl]
+    F[Extract<br/>structured JSON]
+    G[Interact<br/>Playwright]
+    H[(SearXNG)]
+    I[(Ollama)]
+    J[Playwright page rendering]
+    K[Playwright sessions]
+    A --> B
+    A --> C
+    B --> D
     C --> D
-    D --> E[Firecrawl API<br/>search / map / scrape / crawl]
-    D --> F[Extract API<br/>structured JSON via Ollama]
-    D --> G[Interact API<br/>Playwright browser automation]
-    E --> H[(SearXNG)]
-    F --> I[(Ollama)]
+    D --> E
+    D --> F
+    D --> G
+    E --> H
+    E -.-> J
+    F --> I
     G --> I
-    E -.-> J[Playwright page rendering]
-    G --> K[Playwright stateful sessions]
+    G --> K
 ```
 
 External existing services:
