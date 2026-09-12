@@ -1,0 +1,246 @@
+name: web-research-stack
+
+x-firecrawl-env: &firecrawl-env
+  REDIS_URL: redis://redis:6379
+  REDIS_RATE_LIMIT_URL: redis://redis:6379
+  PLAYWRIGHT_MICROSERVICE_URL: http://firecrawl-playwright:3000/scrape
+  POSTGRES_USER: ${POSTGRES_USER}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+  POSTGRES_DB: ${POSTGRES_DB}
+  POSTGRES_HOST: firecrawl-postgres
+  POSTGRES_PORT: 5432
+  USE_DB_AUTHENTICATION: "false"
+  NUM_WORKERS_PER_QUEUE: ${NUM_WORKERS_PER_QUEUE}
+  CRAWL_CONCURRENT_REQUESTS: ${CRAWL_CONCURRENT_REQUESTS}
+  MAX_CONCURRENT_JOBS: ${MAX_CONCURRENT_JOBS}
+  BROWSER_POOL_SIZE: ${BROWSER_POOL_SIZE}
+  LOGGING_LEVEL: ${LOGGING_LEVEL}
+  SEARXNG_ENDPOINT: ${SEARXNG_ENDPOINT}
+  SEARXNG_ENGINES: ${SEARXNG_ENGINES}
+  SEARXNG_CATEGORIES: ${SEARXNG_CATEGORIES}
+
+services:
+  gateway:
+    container_name: web-research-gateway
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    command: uvicorn gateway.app:app --host 0.0.0.0 --port 8080
+    environment:
+      FIRECRAWL_BASE_URL: http://firecrawl-api:3002
+      EXTRACT_BASE_URL: http://extract:8090
+      INTERACT_BASE_URL: http://interact:8091
+      GATEWAY_API_KEY: ${GATEWAY_API_KEY}
+      SERVICE_TIMEOUT_SECONDS: 180
+      LOG_LEVEL: ${LOGGING_LEVEL}
+    ports:
+      - "127.0.0.1:${GATEWAY_PORT}:8080"
+    depends_on:
+      firecrawl-api:
+        condition: service_started
+      extract:
+        condition: service_healthy
+      interact:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks: [web-research-network]
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+
+  mcp:
+    container_name: web-research-mcp
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    command: python -m mcp_server.server
+    environment:
+      GATEWAY_BASE_URL: http://gateway:8080
+      GATEWAY_API_KEY: ${GATEWAY_API_KEY}
+      LOG_LEVEL: ${LOGGING_LEVEL}
+    ports:
+      - "127.0.0.1:${MCP_PORT}:8081"
+    depends_on:
+      gateway:
+        condition: service_started
+    networks: [web-research-network]
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import socket; socket.create_connection(('127.0.0.1', 8081), timeout=3)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  extract:
+    container_name: web-research-extract
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    command: uvicorn extract.app:app --host 0.0.0.0 --port 8090
+    environment:
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
+      OLLAMA_MODEL: ${OLLAMA_MODEL}
+      OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS}
+      EXTRACT_MAX_RETRIES: ${EXTRACT_MAX_RETRIES}
+      EXTRACT_MAX_CONTENT_CHARS: ${EXTRACT_MAX_CONTENT_CHARS}
+      LOG_LEVEL: ${LOGGING_LEVEL}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks: [web-research-network]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+
+  interact:
+    container_name: web-research-interact
+    build:
+      context: .
+      dockerfile: interact/Dockerfile
+    command: uvicorn interact.app:app --host 0.0.0.0 --port 8091
+    environment:
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
+      OLLAMA_MODEL: ${OLLAMA_MODEL}
+      OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS}
+      INTERACT_MAX_SESSIONS: ${INTERACT_MAX_SESSIONS}
+      INTERACT_SESSION_TTL_SECONDS: ${INTERACT_SESSION_TTL_SECONDS}
+      INTERACT_NAVIGATION_TIMEOUT_MS: ${INTERACT_NAVIGATION_TIMEOUT_MS}
+      INTERACT_MAX_TEXT_CHARS: ${INTERACT_MAX_TEXT_CHARS}
+      INTERACT_LLM_SELECTOR_FALLBACK: ${INTERACT_LLM_SELECTOR_FALLBACK}
+      INTERACT_BLOCK_MEDIA: ${INTERACT_BLOCK_MEDIA}
+      INTERACT_HOST_ALLOWLIST: ${INTERACT_HOST_ALLOWLIST}
+      LOG_LEVEL: ${LOGGING_LEVEL}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks: [web-research-network]
+    restart: unless-stopped
+    shm_size: 1gb
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8091/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m
+
+  firecrawl-api:
+    container_name: web-research-firecrawl-api
+    image: ${FIRECRAWL_API_IMAGE}:${FIRECRAWL_VERSION}
+    command: node dist/src/harness.js --start-docker
+    environment:
+      <<: *firecrawl-env
+      HOST: 0.0.0.0
+      PORT: 3002
+      EXTRACT_WORKER_PORT: 3004
+      WORKER_PORT: 3005
+      NUQ_RABBITMQ_URL: amqp://rabbitmq:5672
+      ENV: local
+    depends_on:
+      redis:
+        condition: service_started
+      firecrawl-playwright:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+      firecrawl-postgres:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks: [web-research-network]
+    restart: unless-stopped
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    volumes:
+      - type: bind
+        source: ./data/fdb
+        target: /var/fdb
+        read_only: true
+
+  firecrawl-playwright:
+    container_name: web-research-firecrawl-playwright
+    image: ${FIRECRAWL_PLAYWRIGHT_IMAGE}:${FIRECRAWL_VERSION}
+    environment:
+      PORT: 3000
+      BLOCK_MEDIA: ${BLOCK_MEDIA}
+      MAX_CONCURRENT_PAGES: ${CRAWL_CONCURRENT_REQUESTS}
+    networks: [web-research-network]
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    shm_size: 1gb
+
+  redis:
+    container_name: web-research-redis
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - type: bind
+        source: ./data/redis
+        target: /data
+    networks: [web-research-network]
+    restart: unless-stopped
+
+  rabbitmq:
+    container_name: web-research-rabbitmq
+    image: rabbitmq:3-management-alpine
+    volumes:
+      - type: bind
+        source: ./data/rabbitmq
+        target: /var/lib/rabbitmq
+    networks: [web-research-network]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 10s
+
+  firecrawl-postgres:
+    container_name: web-research-firecrawl-postgres
+    image: ${FIRECRAWL_NUQ_POSTGRES_IMAGE}:${FIRECRAWL_VERSION}
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - type: bind
+        source: ./data/firecrawl-postgres
+        target: /var/lib/postgresql/data
+    networks: [web-research-network]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 10s
+
+networks:
+  web-research-network:
+    driver: bridge
+

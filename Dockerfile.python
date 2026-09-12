@@ -1,0 +1,19 @@
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
+COPY common /app/common
+COPY gateway /app/gateway
+COPY extract /app/extract
+COPY mcp /app/mcp_server
+COPY interact/__init__.py /app/interact/__init__.py
+COPY interact/security.py /app/interact/security.py
+COPY tests /app/tests
+
+RUN useradd --create-home --uid 10001 appuser && chown -R appuser:appuser /app
+USER appuser
