@@ -885,21 +885,19 @@ curl -sS "$WRS/v1/interact/sessions/$SESSION_ID/action" \
 
 The MCP server is an alternate interface over the **same REST gateway**. It does not maintain a second implementation of search, scrape, crawl, extract, or browser interaction.
 
-```text
-MCP client
-   |
-   v
-http://127.0.0.1:8083/mcp
-   |
-   v
-FastMCP server
-   |
-   v
-REST gateway
-   |
-   +--> Firecrawl --> SearXNG
-   +--> Extract --> Ollama
-   +--> Interact --> Playwright --> optional Ollama
+```mermaid
+%%{init: {'theme': 'default', 'flowchart': {'useMaxWidth': true}}}%%
+flowchart TD
+    A[MCP client] --> B[http://127.0.0.1:8083/mcp]
+    B --> C[FastMCP server]
+    C --> D[REST gateway]
+    D --> E[Firecrawl]
+    D --> F[Extract]
+    D --> G[Interact]
+    E --> H[(SearXNG)]
+    F --> I[(Ollama)]
+    G --> J[(Playwright)]
+    G -.-> K[(Ollama optional)]
 ```
 
 The MCP endpoint uses **Streamable HTTP**:
