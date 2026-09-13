@@ -68,13 +68,39 @@
         </div>
         <div class="mt-2 flex items-center gap-4">
           <label class="text-sm text-slate-600 flex items-center gap-1">
-            <input type="checkbox" id="scrape-only-main" class="rounded" /> onlyMainContent
+            <input type="checkbox" id="scrape-only-main" class="rounded" /> Only main content
+          </label>
+          <label class="text-sm text-slate-600 flex items-center gap-1">
+            <input type="checkbox" id="scrape-mobile" class="rounded" /> Mobile viewport
+          </label>
+          <label class="text-sm text-slate-600 flex items-center gap-1">
+            <input type="checkbox" id="scrape-skip-tls" class="rounded" /> Skip TLS verification
           </label>
         </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+          <div>
+            <label class="block text-sm font-medium mb-1">Timeout <span class="font-normal text-slate-500">— ms</span></label>
+            <input id="scrape-timeout" type="number" class="w-full border rounded px-3 py-1 font-mono text-sm" value="30000" min="1" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Wait for <span class="font-normal text-slate-500">— ms</span></label>
+            <input id="scrape-wait-for" type="number" class="w-full border rounded px-3 py-1 font-mono text-sm" value="1000" min="0" />
+          </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+          <div>
+            <label class="block text-sm font-medium mb-1">Include tags <span class="font-normal text-slate-500">— comma-separated CSS selectors</span></label>
+            <input id="scrape-include-tags" type="text" class="w-full border rounded px-3 py-1 font-mono text-sm" placeholder="#content, .article" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Exclude tags <span class="font-normal text-slate-500">— comma-separated CSS selectors</span></label>
+            <input id="scrape-exclude-tags" type="text" class="w-full border rounded px-3 py-1 font-mono text-sm" placeholder="nav, footer, .ads" />
+          </div>
+        </div>
         <div class="mt-2">
-          <label class="block text-sm font-medium mb-1">Advanced options <span class="font-normal text-slate-500">(JSON, optional)</span></label>
-          <textarea id="scrape-advanced" rows="4" class="w-full border rounded p-2 font-mono text-sm" placeholder='{ "timeout": 30000, "headers": {"Accept-Language": "en-US"}, "mobile": false, "includeTags": ["#content"], "excludeTags": ["nav"], "waitFor": 1000 }'></textarea>
-          <p class="text-xs text-slate-500 mt-1">Common keys: <code>timeout</code>, <code>headers</code>, <code>includeTags</code>, <code>excludeTags</code>, <code>mobile</code>, <code>skipTlsVerification</code>, <code>waitFor</code>, <code>extract</code> (for the extract schema).</p>
+          <label class="block text-sm font-medium mb-1">Advanced options <span class="font-normal text-slate-500">(JSON, optional; controls above take precedence)</span></label>
+          <textarea id="scrape-advanced" rows="2" class="w-full border rounded p-2 font-mono text-sm" placeholder='{ "headers": {"Accept-Language": "en-US"}, "extract": {...} }'></textarea>
+          <p class="text-xs text-slate-500 mt-1">Common keys: <code>headers</code>, <code>extract</code> (schema).</p>
         </div>
         <div class="mt-2">
           <label class="block text-sm font-medium mb-1">JSON body</label>
@@ -101,9 +127,10 @@
             <input id="map-limit" type="number" class="w-full border rounded px-3 py-1 font-mono text-sm" value="10" min="1" max="100" />
           </div>
         </div>
-        <div class="mt-2">
-          <label class="block text-sm font-medium mb-1">Advanced options <span class="font-normal text-slate-500">(JSON, optional)</span></label>
-          <textarea id="map-advanced" rows="2" class="w-full border rounded p-2 font-mono text-sm" placeholder='{ "sitemapOnly": false, "includeSubdomains": true }'></textarea>
+        <div class="mt-2 flex items-center gap-4">
+          <label class="text-sm text-slate-600 flex items-center gap-1">
+            <input type="checkbox" id="map-subdomains" class="rounded" checked /> Include subdomains <span class="font-normal text-slate-500">— also crawl links on subdomains</span>
+          </label>
         </div>
         <div class="mt-2 flex items-center gap-2">
           <button onclick="buildMapRequest()" class="bg-emerald-600 text-white px-4 py-2 rounded">Build request</button>
@@ -123,28 +150,67 @@
       <!-- Crawl -->
       <section id="tab-crawl" class="tab-content hidden">
         <div class="mb-2 text-sm text-slate-500">POST <span class="font-mono">/v1/crawl</span></div>
-        <label class="block text-sm font-medium mb-1">JSON body</label>
-        <textarea id="crawl-body" rows="7" class="w-full border rounded p-2 font-mono text-sm">{
-  "url": "https://www.princess.com",
-  "limit": 2,
-  "includePaths": [],
-  "excludePaths": []
-}</textarea>
-        <div class="flex items-center gap-2 mt-2">
-          <button onclick="startCrawl()" class="bg-blue-600 text-white px-4 py-2 rounded">Start Crawl</button>
-          <span class="text-xs text-slate-500">Step 1: start the crawl job</span>
+        <p class="text-sm text-slate-600 mb-2">Start a multi-page crawl. After submitting, use the returned job id to check status.</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <div>
+            <label class="block text-sm font-medium mb-1">URL <span class="font-normal text-slate-500">— starting page</span></label>
+            <input id="crawl-url" type="text" class="w-full border rounded px-3 py-1 font-mono text-sm" value="https://www.princess.com" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Limit <span class="font-normal text-slate-500">— max pages to crawl</span></label>
+            <input id="crawl-limit" type="number" class="w-full border rounded px-3 py-1 font-mono text-sm" value="10" min="1" max="100" />
+          </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+          <div>
+            <label class="block text-sm font-medium mb-1">Max depth <span class="font-normal text-slate-500">— link depth from start</span></label>
+            <input id="crawl-depth" type="number" class="w-full border rounded px-3 py-1 font-mono text-sm" value="2" min="0" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Crawl entire domain</label>
+            <div class="mt-2 flex items-center gap-2">
+              <label class="text-sm text-slate-600 flex items-center gap-1">
+                <input type="checkbox" id="crawl-entire-domain" class="rounded" /> Discover all linked pages on this domain
+              </label>
+            </div>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+          <div>
+            <label class="block text-sm font-medium mb-1">Include paths <span class="font-normal text-slate-500">— regex patterns, comma-separated</span></label>
+            <input id="crawl-include" type="text" class="w-full border rounded px-3 py-1 font-mono text-sm" placeholder="cruise.*, /ships" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Exclude paths <span class="font-normal text-slate-500">— regex patterns, comma-separated</span></label>
+            <input id="crawl-exclude" type="text" class="w-full border rounded px-3 py-1 font-mono text-sm" placeholder=".*/blog/.*, /help" />
+          </div>
+        </div>
+        <div class="mt-2 flex items-center gap-4">
+          <label class="text-sm text-slate-600 flex items-center gap-1">
+            <input type="checkbox" id="crawl-scrape" class="rounded" checked /> Scrape each page as markdown
+          </label>
         </div>
         <div class="mt-2 flex flex-wrap gap-2">
           <button onclick="loadExample('crawl-body', {url: sampleUrl(), limit: 2, includePaths: [], excludePaths: []})" class="text-sm text-blue-600 underline py-2">Basic crawl</button>
           <button onclick="loadExample('crawl-body', {url: sampleUrl(), limit: 20, maxDepth: 2, includePaths: ['cruise.*'], excludePaths: ['.*/blog/.*'], scrapeOptions: {formats: ['markdown'], onlyMainContent: true}})" class="text-sm text-blue-600 underline py-2">Controlled depth</button>
           <button onclick="loadExample('crawl-body', {url: sampleUrl(), limit: 50, crawlEntireDomain: true, scrapeOptions: {formats: ['markdown'], onlyMainContent: true}})" class="text-sm text-blue-600 underline py-2">Entire domain</button>
         </div>
-        <div class="mt-4 flex gap-2">
+        <div class="mt-2 flex items-center gap-2">
+          <button onclick="buildCrawlRequest()" class="bg-emerald-600 text-white px-4 py-2 rounded">Build request</button>
+          <span class="text-xs text-slate-500">Step 1: build the JSON body from the controls</span>
+        </div>
+        <div class="mt-2">
+          <label class="block text-sm font-medium mb-1">JSON body</label>
+          <textarea id="crawl-body" rows="6" class="w-full border rounded p-2 font-mono text-sm"></textarea>
+        </div>
+        <div class="mt-2 flex items-center gap-2">
+          <button onclick="startCrawl()" class="bg-blue-600 text-white px-4 py-2 rounded">Submit</button>
+          <span class="text-xs text-slate-500">Step 2: start the crawl job</span>
+        </div>
+        <div class="mt-2 flex items-center gap-2">
           <input id="crawl-job" type="text" placeholder="job id" class="border rounded px-3 py-1 flex-1 font-mono" />
-          <div class="flex items-center gap-2">
-            <button onclick="checkCrawl()" class="bg-slate-600 text-white px-4 py-2 rounded">Check Status</button>
-            <span class="text-xs text-slate-500">Step 2: check the job status</span>
-          </div>
+          <button onclick="checkCrawl()" class="bg-slate-600 text-white px-4 py-2 rounded">Check Status</button>
+          <span class="text-xs text-slate-500">Step 3: check the job status</span>
         </div>
         <pre id="crawl-out" class="mt-4 p-3 bg-slate-100 rounded text-sm"></pre>
       </section>
@@ -212,13 +278,13 @@
       <!-- Extract -->
       <section id="tab-extract" class="tab-content hidden">
         <div class="mb-2 text-sm text-slate-500">POST <span class="font-mono">/v1/extract</span></div>
-        <label class="block text-sm font-medium mb-1">URL for schema generation</label>
+        <label class="block text-sm font-medium mb-1">URL <span class="font-normal text-slate-500">— page used to generate the extraction schema</span></label>
         <input id="schema-url" type="text" value="https://www.princess.com" class="w-full border rounded px-3 py-2 mb-2 font-mono text-sm" />
         <div class="flex items-center gap-2 mb-3">
           <button onclick="refreshSchemaUrl()" class="bg-slate-500 text-white px-4 py-2 rounded">Random sample URL</button>
           <span class="text-xs text-slate-500">Step 1: pick a page</span>
         </div>
-        <label class="block text-sm font-medium mb-1">Instruction for schema generation</label>
+        <label class="block text-sm font-medium mb-1">Instruction <span class="font-normal text-slate-500">— natural-language description of what to extract</span></label>
         <input id="schema-instruction" name="schema-instruction" type="text" value="Extract the page title, a one-sentence summary, and the main topic." autocomplete="off" placeholder="e.g. Extract the page title and a short summary" class="w-full border rounded px-3 py-2 mb-2 font-mono text-sm" />
         <div class="flex items-center gap-2 mb-3">
           <button onclick="suggestInstruction()" class="bg-slate-500 text-white px-4 py-2 rounded">Suggest instruction</button>
@@ -237,8 +303,9 @@
     "required": ["title"]
   }
 }</textarea>
-        <div class="mt-2 flex flex-wrap gap-2">
+        <div class="mt-2 flex items-center flex-wrap gap-2">
           <button onclick="sendPost('/v1/extract','extract-body','extract-out')" class="bg-blue-600 text-white px-4 py-2 rounded">Submit</button>
+          <span class="text-xs text-slate-500">Step 4: submit the extraction request</span>
           <button onclick="loadExample('extract-body', {url: sampleUrl(), instruction: 'Extract the page title.', schema: {type: 'object', properties: {title: {type: 'string'}}, required: ['title']}})" class="text-sm text-blue-600 underline py-2">Simple URL</button>
           <button onclick="loadExample('extract-body', {url: sampleUrl(), instruction: 'Extract the page title, a one-sentence summary, and the main topic.', schema: {type: 'object', properties: {title: {type: 'string'}, summary: {type: 'string'}, topic: {type: 'string'}}, required: ['title','summary','topic']}})" class="text-sm text-blue-600 underline py-2">Complex schema</button>
           <button onclick="loadExample('extract-body', {url: sampleUrl(), instruction: 'Extract product details: name, price, rating, and whether it is in stock.', schema: {type: 'object', properties: {name: {type: 'string'}, price: {type: 'string'}, rating: {type: 'string'}, in_stock: {type: 'boolean'}}, required: ['name','price','rating','in_stock']}})" class="text-sm text-blue-600 underline py-2">Product page</button>
@@ -281,11 +348,12 @@
 
         <div id="interact-navigate" class="interact-content hidden">
           <div class="mb-2 text-sm text-slate-500">POST <span class="font-mono">/v1/interact/sessions/{session_id}/navigate</span></div>
+          <label class="block text-sm font-medium mb-1">Session id <span class="font-normal text-slate-500">— returned by the Create step</span></label>
           <div class="flex items-center gap-2 mb-2">
             <input id="navigate-sid" type="text" placeholder="session id" class="sid-input border rounded px-3 py-1 flex-1 font-mono" />
             <button onclick="pasteSid('navigate-sid')" class="bg-slate-500 text-white px-3 py-1 rounded text-sm">Paste</button>
           </div>
-          <label class="block text-sm font-medium mb-1">JSON body</label>
+          <label class="block text-sm font-medium mb-1">JSON body <span class="font-normal text-slate-500">— {url, wait_until}</span></label>
           <textarea id="navigate-body" rows="4" class="w-full border rounded p-2 font-mono text-sm">{
   "url": "https://www.princess.com",
   "wait_until": "domcontentloaded"
@@ -300,6 +368,7 @@
 
         <div id="interact-text" class="interact-content hidden">
           <div class="mb-2 text-sm text-slate-500">GET <span class="font-mono">/v1/interact/sessions/{session_id}/text</span></div>
+          <label class="block text-sm font-medium mb-1">Session id <span class="font-normal text-slate-500">— returned by the Create step</span></label>
           <div class="flex items-center gap-2 mb-2">
             <input id="text-sid" type="text" placeholder="session id" class="sid-input border rounded px-3 py-1 flex-1 font-mono" />
             <button onclick="pasteSid('text-sid')" class="bg-slate-500 text-white px-3 py-1 rounded text-sm">Paste</button>
@@ -310,6 +379,7 @@
 
         <div id="interact-screenshot" class="interact-content hidden">
           <div class="mb-2 text-sm text-slate-500">GET <span class="font-mono">/v1/interact/sessions/{session_id}/screenshot</span></div>
+          <label class="block text-sm font-medium mb-1">Session id <span class="font-normal text-slate-500">— returned by the Create step</span></label>
           <div class="flex items-center gap-2 mb-2">
             <input id="screenshot-sid" type="text" placeholder="session id" class="sid-input border rounded px-3 py-1 flex-1 font-mono" />
             <button onclick="pasteSid('screenshot-sid')" class="bg-slate-500 text-white px-3 py-1 rounded text-sm">Paste</button>
@@ -321,12 +391,13 @@
 
         <div id="interact-action" class="interact-content hidden">
           <div class="mb-2 text-sm text-slate-500">POST <span class="font-mono">/v1/interact/sessions/{session_id}/action</span></div>
+          <label class="block text-sm font-medium mb-1">Session id <span class="font-normal text-slate-500">— returned by the Create step</span></label>
           <div class="flex items-center gap-2 mb-2">
             <input id="action-sid" type="text" placeholder="session id" class="sid-input border rounded px-3 py-1 flex-1 font-mono" />
             <button onclick="pasteSid('action-sid')" class="bg-slate-500 text-white px-3 py-1 rounded text-sm">Paste</button>
           </div>
           <button onclick="sendGet('/v1/interact/sessions/' + sid('action-sid') + '/elements','interact-out')" class="mb-2 bg-slate-500 text-white px-4 py-2 rounded">List interactive elements</button>
-          <label class="block text-sm font-medium mb-1">JSON body</label>
+          <label class="block text-sm font-medium mb-1">JSON body <span class="font-normal text-slate-500">— {action, selector, value, key}</span></label>
           <textarea id="action-body" rows="5" class="w-full border rounded p-2 font-mono text-sm">{
   "action": "wait",
   "value": "500"
@@ -346,7 +417,7 @@
 
         <div id="interact-plan" class="interact-content hidden">
           <div class="mb-2 text-sm text-slate-500">Natural-language action plan <span class="font-mono">/v1/extract</span></div>
-          <label class="block text-sm font-medium mb-1">What do you want to do?</label>
+          <label class="block text-sm font-medium mb-1">Goal <span class="font-normal text-slate-500">— natural-language task for the action plan</span></label>
           <textarea id="interact-goal" rows="3" class="w-full border rounded p-2 font-mono text-sm" placeholder="e.g., find the username field and enter John"></textarea>
           <div class="mt-2 flex flex-wrap gap-2">
             <button onclick="useCaseLogin()" class="text-sm bg-slate-500 text-white px-3 py-1 rounded">Login</button>
@@ -363,6 +434,7 @@
 
         <div id="interact-close" class="interact-content hidden">
           <div class="mb-2 text-sm text-slate-500">DELETE <span class="font-mono">/v1/interact/sessions/{session_id}</span></div>
+          <label class="block text-sm font-medium mb-1">Session id <span class="font-normal text-slate-500">— returned by the Create step</span></label>
           <div class="flex items-center gap-2 mb-2">
             <input id="close-sid" type="text" placeholder="session id" class="sid-input border rounded px-3 py-1 flex-1 font-mono" />
             <button onclick="pasteSid('close-sid')" class="bg-slate-500 text-white px-3 py-1 rounded text-sm">Paste</button>
@@ -387,7 +459,7 @@
           </ol>
         </div>
         <div class="mb-3">
-          <label class="block text-sm font-medium mb-1">MCP session id <span id="mcp-status" class="font-normal text-slate-500">— not set; run Initialize first</span></label>
+          <label class="block text-sm font-medium mb-1">MCP session id <span id="mcp-status" class="font-normal text-slate-500">— returned by Initialize; needed for all other calls</span></label>
           <div class="flex items-center gap-2">
             <input id="mcp-session-id" type="text" class="border rounded px-3 py-1 flex-1 font-mono text-sm" value="" />
             <button onclick="newMcpSession()" class="bg-slate-500 text-white px-3 py-1 rounded text-sm">Reset / New</button>
@@ -395,7 +467,7 @@
           </div>
         </div>
         <div class="mb-2">
-          <label class="block text-sm font-medium mb-1">JSON-RPC body</label>
+          <label class="block text-sm font-medium mb-1">JSON-RPC body <span class="font-normal text-slate-500">— editable before sending</span></label>
           <textarea id="mcp-body" rows="10" class="w-full border rounded p-2 font-mono text-sm">{
   "jsonrpc": "2.0",
   "id": 1,
@@ -412,7 +484,7 @@
         </div>
         <div class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
           <div>
-            <label class="block text-sm font-medium mb-1">Tool name</label>
+            <label class="block text-sm font-medium mb-1">Tool name <span class="font-normal text-slate-500">— MCP tool to call</span></label>
             <select id="mcp-tool" class="border rounded px-2 py-1 w-full font-mono text-sm">
               <option value="about">about</option>
               <option value="search">search</option>
@@ -430,7 +502,7 @@
             </select>
           </div>
           <div>
-            <label class="block text-sm font-medium mb-1">Parameters (JSON)</label>
+            <label class="block text-sm font-medium mb-1">Parameters (JSON) <span class="font-normal text-slate-500">— arguments as a JSON object</span></label>
             <textarea id="mcp-tool-params" rows="4" class="w-full border rounded p-2 font-mono text-sm" placeholder='{ "query": "Royal Caribbean Alaska" }'></textarea>
           </div>
         </div>
@@ -677,6 +749,12 @@
       const url = document.getElementById('scrape-url').value.trim() || sampleUrl();
       const selected = Array.from(document.getElementById('scrape-formats').selectedOptions).map(o => o.value);
       const onlyMain = document.getElementById('scrape-only-main').checked;
+      const mobile = document.getElementById('scrape-mobile').checked;
+      const skipTls = document.getElementById('scrape-skip-tls').checked;
+      const timeout = parseInt(document.getElementById('scrape-timeout').value, 10);
+      const waitFor = parseInt(document.getElementById('scrape-wait-for').value, 10);
+      const includeTags = document.getElementById('scrape-include-tags').value.trim();
+      const excludeTags = document.getElementById('scrape-exclude-tags').value.trim();
       const advanced = document.getElementById('scrape-advanced').value.trim();
       let extra = {};
       if (advanced) {
@@ -686,6 +764,12 @@
       const body = { ...extra, url };
       if (selected.length) body.formats = selected;
       if (onlyMain) body.onlyMainContent = true;
+      if (mobile) body.mobile = true;
+      if (skipTls) body.skipTlsVerification = true;
+      if (!isNaN(timeout) && timeout > 0) body.timeout = timeout;
+      if (!isNaN(waitFor) && waitFor >= 0) body.waitFor = waitFor;
+      if (includeTags) body.includeTags = includeTags.split(',').map(s => s.trim()).filter(Boolean);
+      if (excludeTags) body.excludeTags = excludeTags.split(',').map(s => s.trim()).filter(Boolean);
       const scrapeBody = document.getElementById('scrape-body');
       const scrapeBodyText = JSON.stringify(body, null, 2);
       scrapeBody.value = scrapeBodyText;
@@ -720,13 +804,8 @@
     function buildMapRequest() {
       const mapUrl = document.getElementById('map-url').value.trim() || sampleUrl();
       const limit = parseInt(document.getElementById('map-limit').value, 10) || 10;
-      const advanced = document.getElementById('map-advanced').value.trim();
-      let extra = {};
-      if (advanced) {
-        try { extra = JSON.parse(advanced); }
-        catch (e) { document.getElementById('map-out').textContent = 'Invalid advanced options JSON: ' + e.message; return; }
-      }
-      const body = { ...extra, url: mapUrl, limit };
+      const includeSubdomains = document.getElementById('map-subdomains').checked;
+      const body = { url: mapUrl, limit, includeSubdomains };
       const mapBody = document.getElementById('map-body');
       const mapBodyText = JSON.stringify(body, null, 2);
       mapBody.value = mapBodyText;
@@ -739,6 +818,26 @@
       }
       const out = document.getElementById(outId);
       out.textContent = 'Missing session id';
+    }
+
+    function buildCrawlRequest() {
+      const url = document.getElementById('crawl-url').value.trim() || sampleUrl();
+      const limit = parseInt(document.getElementById('crawl-limit').value, 10) || 10;
+      const maxDepth = parseInt(document.getElementById('crawl-depth').value, 10);
+      const entireDomain = document.getElementById('crawl-entire-domain').checked;
+      const include = document.getElementById('crawl-include').value.trim();
+      const exclude = document.getElementById('crawl-exclude').value.trim();
+      const scrape = document.getElementById('crawl-scrape').checked;
+      const body = { url, limit };
+      if (!isNaN(maxDepth) && maxDepth >= 0) body.maxDepth = maxDepth;
+      if (entireDomain) body.crawlEntireDomain = true;
+      if (include) body.includePaths = include.split(',').map(s => s.trim()).filter(Boolean);
+      if (exclude) body.excludePaths = exclude.split(',').map(s => s.trim()).filter(Boolean);
+      if (scrape) body.scrapeOptions = { formats: ['markdown'], onlyMainContent: true };
+      const crawlBody = document.getElementById('crawl-body');
+      const bodyText = JSON.stringify(body, null, 2);
+      crawlBody.value = bodyText;
+      crawlBody.rows = Math.max(6, bodyText.split('\n').length);
     }
 
     async function startCrawl() {
