@@ -8,6 +8,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     .tab-active { background-color: #2563eb; color: #ffffff; border-radius: 0.25rem; font-weight: 600; }
+    .tab-planner-active { background-color: #7c3aed; color: #ffffff; border-radius: 0.25rem; font-weight: 600; }
     .subtab-active { background-color: #2563eb; color: #ffffff; border-radius: 0.25rem; font-weight: 600; }
     pre { white-space: pre-wrap; word-break: break-word; }
     html { font-size: 110%; }
@@ -17,7 +18,7 @@
     input, select, textarea { background-color: #f8fafc; }
   </style>
   <script>
-    window.GATEWAY_API_KEY = "__GATEWAY_API_KEY__";
+    // No API key is pre-injected; the user enters it in the UI.
   </script>
 </head>
 <body class="h-full bg-slate-50 text-slate-800">
@@ -28,14 +29,17 @@
       <div class="mt-3 flex flex-wrap items-center gap-2 text-sm">
         <span class="px-3 py-1 rounded bg-blue-50 border border-blue-100 text-slate-700">
           <span class="font-semibold text-slate-500">REST API: </span>
-          <span class="font-mono font-semibold text-slate-800 ml-1">http://127.0.0.1:8084</span>
+          <span class="font-mono font-semibold text-slate-800 ml-1">http://127.0.0.1:8080</span>
         </span>
         <span class="px-3 py-1 rounded bg-slate-100 border border-slate-200 text-slate-700">
           <span class="font-semibold text-slate-500">MCP Server: </span>
-          <span class="font-mono font-semibold text-slate-800 ml-1">http://127.0.0.1:8083/mcp</span>
+          <span class="font-mono font-semibold text-slate-800 ml-1">http://127.0.0.1:8081/mcp</span>
         </span>
       </div>
-      <input id="api-key" type="hidden" value="__GATEWAY_API_KEY__" />
+      <div class="mt-3">
+        <label class="block text-sm font-medium mb-1">API key <span class="font-normal text-slate-500">— optional; override the gateway cookie only if needed</span></label>
+        <input id="api-key" type="password" value="" placeholder="paste your gateway key" class="w-full md:w-1/2 border rounded px-3 py-1 font-mono text-sm" />
+      </div>
       <div class="mt-3 flex flex-wrap items-center gap-3 text-sm">
         <span class="font-medium text-slate-600">Service Status:</span>
         <div id="health-indicators" class="flex flex-wrap items-center gap-3">
@@ -526,6 +530,29 @@
           <button onclick="copyMcpResult()" class="bg-slate-500 text-white px-3 py-1 rounded text-sm">Copy response</button>
         </div>
       </section>
+
+      <!-- Planner -->
+      <section id="tab-planner" class="tab-content hidden">
+        <div class="mb-2 text-sm text-slate-500">Natural language → MCP plan → execution</div>
+        <div class="mb-3 p-3 bg-purple-50 border border-purple-100 rounded text-sm text-slate-700">
+          <strong>Describe a task</strong> in plain English. The gateway uses the configured LLM to generate an MCP tool call plan; you can review it and then execute it step by step.
+        </div>
+        <label class="block text-sm font-medium mb-1">Goal <span class="font-normal text-slate-500">— what the system should do</span></label>
+        <textarea id="planner-goal" rows="4" class="w-full border rounded p-2 font-mono text-sm" placeholder="Go to https://www.princess.com, find the search bar, enter 'Alaska cruises', click the Search button, wait for results, then scrape the results page."></textarea>
+        <div class="mt-2 flex items-center gap-2">
+          <button onclick="generateMcpPlan()" class="bg-purple-600 text-white px-4 py-2 rounded">Generate plan</button>
+          <button id="planner-execute" onclick="executeMcpPlan()" class="hidden bg-blue-600 text-white px-4 py-2 rounded">Execute plan</button>
+          <span class="text-xs text-slate-500">Step 1: describe the task; Step 2: review the plan; Step 3: execute it</span>
+        </div>
+        <div class="mt-2">
+          <label class="block text-sm font-medium mb-1">Planned MCP calls</label>
+          <pre id="planner-plan" class="p-3 bg-slate-100 rounded text-sm"></pre>
+        </div>
+        <div class="mt-2">
+          <label class="block text-sm font-medium mb-1">Execution results</label>
+          <pre id="planner-out" class="p-3 bg-slate-100 rounded text-sm"></pre>
+        </div>
+      </section>
     </main>
   </div>
 
@@ -548,6 +575,7 @@
       { id: 'extract', label: 'Extract' },
       { id: 'interact', label: 'Interact' },
       { id: 'mcp', label: 'MCP' },
+      { id: 'planner', label: 'Planner', activeClass: 'tab-planner-active' },
     ];
     const interactTabs = [
       { id: 'create', label: 'Create' },
@@ -591,11 +619,122 @@
       }
     }
 
+    let plannerPlan = null;
+
+    async function callMcpRaw(body, sid) {
+      const headers = { 'Authorization': 'Bearer ' + apiKey(), 'Content-Type': 'application/json' };
+      if (sid) headers['Mcp-Session-Id'] = sid;
+      const res = await fetch(url('/mcp'), { method: 'POST', headers, body: JSON.stringify(body) });
+      const text = await res.text();
+      const newSid = res.headers.get('mcp-session-id');
+      return { status: res.status, text, sid: newSid };
+    }
+
+    async function generateMcpPlan() {
+      const goal = document.getElementById('planner-goal').value.trim();
+      const planOut = document.getElementById('planner-plan');
+      const resultOut = document.getElementById('planner-out');
+      const btn = document.getElementById('planner-execute');
+      plannerPlan = null;
+      resultOut.textContent = '';
+      if (!goal) { planOut.textContent = 'Enter a goal first.'; btn.classList.add('hidden'); return; }
+      planOut.textContent = 'Generating plan...';
+      btn.classList.add('hidden');
+      const tools = [
+        'search(query: string, limit?: int, options?: object)',
+        'map_site(url: string, limit?: int, options?: object)',
+        'scrape(url: string, formats?: list, options?: object)',
+        'crawl(url: string, limit?: int, options?: object)',
+        'crawl_status(job_id: string)',
+        'extract(url: string, schema: object, instruction?: string, options?: object)',
+        'browser_create_session()',
+        'browser_navigate(session_id: string, url: string, options?: object)',
+        'browser_text(session_id: string)',
+        'browser_screenshot(session_id: string)',
+        'browser_action(session_id: string, action: string, selector?: string, value?: string, key?: string, allow_consequential?: bool, options?: object)',
+        'browser_close_session(session_id: string)'
+      ].join('\n');
+      const schema = {
+        type: 'object',
+        properties: {
+          plan: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                tool: { type: 'string' },
+                params: { type: 'object' },
+                reason: { type: 'string' }
+              },
+              required: ['tool', 'params']
+            }
+          }
+        },
+        required: ['plan']
+      };
+      const instruction = 'You are given a list of available MCP tools and a user goal. Return a JSON object matching the schema. The `plan` array should contain the minimal, ordered tool calls needed to fulfill the goal. Only use tools from the available list. Include a short `reason` for each step.';
+      const payload = {
+        content: `Available MCP tools (each takes an options object for extra parameters):\n${tools}\n\nUser goal: ${goal}`,
+        instruction,
+        schema,
+        max_retries: 2
+      };
+      try {
+        const res = await fetch(url('/v1/extract'), {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + apiKey(), 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const j = await res.json();
+        if (!res.ok || j.error || !j.data) {
+          planOut.textContent = `HTTP ${res.status}\n\n${JSON.stringify(j, null, 2)}`;
+          return;
+        }
+        const data = (j.data && j.data.plan) ? j.data.plan : (Array.isArray(j.data) ? j.data : null);
+        if (!Array.isArray(data)) {
+          planOut.textContent = 'No plan returned.\n\n' + JSON.stringify(j, null, 2);
+          return;
+        }
+        plannerPlan = data;
+        planOut.textContent = JSON.stringify(data, null, 2);
+        btn.classList.remove('hidden');
+      } catch (e) {
+        planOut.textContent = `Error: ${e.message}`;
+      }
+    }
+
+    async function executeMcpPlan() {
+      const out = document.getElementById('planner-out');
+      if (!plannerPlan || !plannerPlan.length) { out.textContent = 'No plan to execute. Generate a plan first.'; return; }
+      out.textContent = 'Initializing MCP session...';
+      try {
+        const init = await callMcpRaw({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'web-research-ui-planner', version: '0.1.0' } } });
+        if (init.status !== 200) { out.textContent = `Initialize failed (HTTP ${init.status}):\n\n${init.text}`; return; }
+        const sid = init.sid;
+        let output = `Initialize: HTTP ${init.status}\nMcp-Session-Id: ${sid || '(none)'}`;
+        for (let i = 0; i < plannerPlan.length; i++) {
+          const step = plannerPlan[i];
+          const stepBody = {
+            jsonrpc: '2.0',
+            id: i + 2,
+            method: 'tools/call',
+            params: { name: step.tool, arguments: step.params || {} }
+          };
+          const r = await callMcpRaw(stepBody, sid);
+          output += `\n\nStep ${i + 1}: ${step.tool}\nHTTP ${r.status}\n${formatMcpOutput(r.text, true)}`;
+          out.textContent = output;
+        }
+      } catch (e) {
+        out.textContent = `Error: ${e.message}`;
+      }
+    }
+
     function buildTabs() {
       const nav = document.getElementById('main-tabs');
-      nav.innerHTML = mainTabs.map(t =>
-        `<button id="btn-${t.id}" class="px-4 py-2 whitespace-nowrap font-medium transition ${t.id === currentTab ? 'tab-active' : 'text-slate-700 hover:text-slate-900'}" onclick="showTab('${t.id}')">${t.label}</button>`
-      ).join('');
+      nav.innerHTML = mainTabs.map(t => {
+        const activeClass = t.activeClass || 'tab-active';
+        return `<button id="btn-${t.id}" class="px-4 py-2 whitespace-nowrap font-medium transition ${t.id === currentTab ? activeClass : 'text-slate-700 hover:text-slate-900'}" onclick="showTab('${t.id}')">${t.label}</button>`;
+      }).join('');
 
       const iNav = document.getElementById('interact-tabs');
       iNav.innerHTML = interactTabs.map(t => {
@@ -624,7 +763,7 @@
       });
     }
 
-    function apiKey() { return window.GATEWAY_API_KEY || document.getElementById('api-key').value; }
+    function apiKey() { return document.getElementById('api-key').value; }
     function url(path) { return window.location.origin + path; }
     function prettyEnabled() { return document.getElementById('pretty-print')?.checked ?? true; }
     function sid(inputId) { return document.getElementById(inputId).value.trim(); }

@@ -17,7 +17,7 @@ INTERACT = os.getenv("INTERACT_BASE_URL", "http://interact:8091").rstrip("/")
 MCP = os.getenv("MCP_BASE_URL", "http://mcp:8081").rstrip("/")
 TIMEOUT = float(os.getenv("SERVICE_TIMEOUT_SECONDS", "180"))
 
-app = FastAPI(title="Web Research Stack Gateway", version="0.1.0")
+app = FastAPI(title="Web Research Gateway", version="0.1.0")
 app.add_middleware(RequestContextMiddleware)
 app.add_middleware(OptionalApiKeyMiddleware)
 
@@ -220,17 +220,30 @@ def _get_ui_html() -> str:
         ui_path = os.path.join(os.path.dirname(__file__), "..", "ui", "index.html")
         with open(ui_path, "r") as f:
             _UI_HTML = f.read()
-    return _UI_HTML.replace("__GATEWAY_API_KEY__", os.getenv("GATEWAY_API_KEY", ""))
+    return _UI_HTML
+
+
+def _ui_response() -> HTMLResponse:
+    response = HTMLResponse(_get_ui_html())
+    key = os.getenv("GATEWAY_API_KEY", "").strip()
+    if key:
+        response.set_cookie(
+            key="gateway_api_key",
+            value=key,
+            httponly=True,
+            samesite="strict",
+        )
+    return response
 
 
 @app.get("/ui", response_class=HTMLResponse)
 async def ui_root():
-    return _get_ui_html()
+    return _ui_response()
 
 
 @app.get("/ui/index.html", response_class=HTMLResponse)
 async def ui_index():
-    return _get_ui_html()
+    return _ui_response()
 
 
 @app.post("/mcp")

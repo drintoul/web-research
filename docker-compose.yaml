@@ -1,4 +1,4 @@
-name: web-research-stack
+name: web-research
 
 x-firecrawl-env: &firecrawl-env
   REDIS_URL: redis://redis:6379

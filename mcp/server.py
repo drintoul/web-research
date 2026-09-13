@@ -8,7 +8,7 @@ from fastmcp import FastMCP
 GATEWAY = os.getenv("GATEWAY_BASE_URL", "http://gateway:8080").rstrip("/")
 API_KEY = os.getenv("GATEWAY_API_KEY", "")
 
-mcp = FastMCP("Web Research Stack")
+mcp = FastMCP("Web Research")
 
 
 def _headers() -> dict[str, str]:
@@ -31,32 +31,44 @@ async def _get(path: str) -> Any:
 
 @mcp.tool
 def about() -> str:
-    """Describe the capabilities of this self-hosted web research stack."""
+    """Describe the capabilities of this self-hosted web research."""
     return "Search, map, scrape and crawl via self-hosted Firecrawl; structured extraction via Ollama; browser interaction via Playwright."
 
 
 @mcp.tool
-async def search(query: str, limit: int = 10) -> Any:
+async def search(query: str, limit: int = 10, options: dict[str, Any] | None = None) -> Any:
     """Search the web through the self-hosted Firecrawl search endpoint."""
-    return await _post("/v1/search", {"query": query, "limit": limit})
+    payload = {"query": query, "limit": limit}
+    if options:
+        payload.update(options)
+    return await _post("/v1/search", payload)
 
 
 @mcp.tool
-async def map_site(url: str, limit: int = 100) -> Any:
+async def map_site(url: str, limit: int = 100, options: dict[str, Any] | None = None) -> Any:
     """Map discoverable URLs on a website."""
-    return await _post("/v1/map", {"url": url, "limit": limit})
+    payload = {"url": url, "limit": limit}
+    if options:
+        payload.update(options)
+    return await _post("/v1/map", payload)
 
 
 @mcp.tool
-async def scrape(url: str, formats: list[str] | None = None) -> Any:
+async def scrape(url: str, formats: list[str] | None = None, options: dict[str, Any] | None = None) -> Any:
     """Scrape a URL and return LLM-friendly content."""
-    return await _post("/v1/scrape", {"url": url, "formats": formats or ["markdown"]})
+    payload = {"url": url, "formats": formats or ["markdown"]}
+    if options:
+        payload.update(options)
+    return await _post("/v1/scrape", payload)
 
 
 @mcp.tool
-async def crawl(url: str, limit: int = 100) -> Any:
+async def crawl(url: str, limit: int = 100, options: dict[str, Any] | None = None) -> Any:
     """Start a crawl job."""
-    return await _post("/v1/crawl", {"url": url, "limit": limit})
+    payload = {"url": url, "limit": limit}
+    if options:
+        payload.update(options)
+    return await _post("/v1/crawl", payload)
 
 
 @mcp.tool
@@ -66,9 +78,12 @@ async def crawl_status(job_id: str) -> Any:
 
 
 @mcp.tool
-async def extract(url: str, schema: dict[str, Any], instruction: str = "Extract the requested fields.") -> Any:
+async def extract(url: str, schema: dict[str, Any], instruction: str = "Extract the requested fields.", options: dict[str, Any] | None = None) -> Any:
     """Scrape a URL, then extract structured JSON using Ollama and the provided JSON Schema."""
-    return await _post("/v1/extract", {"url": url, "schema": schema, "instruction": instruction})
+    payload = {"url": url, "schema": schema, "instruction": instruction}
+    if options:
+        payload.update(options)
+    return await _post("/v1/extract", payload)
 
 
 @mcp.tool
@@ -78,9 +93,12 @@ async def browser_create_session() -> Any:
 
 
 @mcp.tool
-async def browser_navigate(session_id: str, url: str) -> Any:
+async def browser_navigate(session_id: str, url: str, options: dict[str, Any] | None = None) -> Any:
     """Navigate a browser session to a public HTTP(S) URL. Private/internal destinations are blocked."""
-    return await _post(f"/v1/interact/sessions/{session_id}/navigate", {"url": url})
+    payload = {"url": url}
+    if options:
+        payload.update(options)
+    return await _post(f"/v1/interact/sessions/{session_id}/navigate", payload)
 
 
 @mcp.tool
@@ -92,6 +110,7 @@ async def browser_action(
     value: str | None = None,
     key: str | None = None,
     allow_consequential: bool = False,
+    options: dict[str, Any] | None = None,
 ) -> Any:
     """Perform a browser action. Consequential clicks are blocked unless explicitly approved."""
     payload = {
@@ -102,6 +121,8 @@ async def browser_action(
         "key": key,
         "allow_consequential": allow_consequential,
     }
+    if options:
+        payload.update(options)
     return await _post(f"/v1/interact/sessions/{session_id}/action", payload)
 
 

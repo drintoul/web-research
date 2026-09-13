@@ -1,4 +1,4 @@
-# Web Research Stack
+# Web Research
 
 A self-hosted web research platform that exposes one stable set of web research endpoints (REST and MCP) for search, discovery, scraping, crawling, structured extraction, and browser interaction, plus a built-in Web UI for exercising all endpoints.
 
@@ -79,7 +79,7 @@ Firecrawl also runs its own internal Playwright service for page scraping. The `
 ## Project layout
 
 ```text
-web-research-stack/
+web-research/
 ├── docker-compose.yaml
 ├── .env.example
 ├── .dockerignore
@@ -120,7 +120,8 @@ web-research-stack/
     └── ci.yml
 ```
 
-# 1. Prerequisites
+# Quick Start
+## Prerequisites
 
 You need:
 
@@ -144,7 +145,7 @@ extra_hosts:
   - "host.docker.internal:host-gateway"
 ```
 
-That lets the Web Research Stack use separate containers without requiring them to belong to the same Compose project or Docker network.
+That lets the Web Research use separate containers without requiring them to belong to the same Compose project or Docker network.
 
 ## Verify the existing services first
 
@@ -162,7 +163,7 @@ curl -sS 'http://127.0.0.1:8088/search?q=firecrawl&format=json' | jq '.results[:
 
 If either command fails, fix that service before starting this project.
 
-# 2. Configuration
+## Configuration
 
 Create the environment file:
 
@@ -208,9 +209,9 @@ OLLAMA_BASE_URL=http://ollama:11434
 SEARXNG_ENDPOINT=http://searxng:8080
 ```
 
-You must then attach the relevant Web Research Stack containers to that external Docker network. The supplied configuration uses host-published ports because it keeps the projects independent and requires no shared-network naming convention.
+You must then attach the relevant Web Research containers to that external Docker network. The supplied configuration uses host-published ports because it keeps the projects independent and requires no shared-network naming convention.
 
-# 3. Firecrawl versioning
+## Firecrawl versioning
 
 The example `.env` allows:
 
@@ -222,7 +223,7 @@ That is convenient for an initial test, but production deployments should use an
 
 Firecrawl's own self-hosting guidance recommends keeping the Compose configuration aligned with the release you deploy. Its internal service topology and environment variables can change across releases.
 
-# 4. Start the stack
+## Start the stack
 
 Validate the Compose file first:
 
@@ -257,10 +258,10 @@ docker compose logs -f --tail=200
 The public interfaces are bound to loopback by default:
 
 ```text
-REST API:    http://127.0.0.1:8084
-OpenAPI UI:  http://127.0.0.1:8084/docs
-MCP server:  http://127.0.0.1:8083/mcp
-Web UI:      http://127.0.0.1:8084/ui  (test/exercise all endpoints; auth required to send requests)
+REST API:    http://127.0.0.1:8080
+OpenAPI UI:  http://127.0.0.1:8080/docs
+MCP server:  http://127.0.0.1:8081/mcp
+Web UI:      http://127.0.0.1:8080/ui  (test/exercise all endpoints; auth required to send requests)
 ```
 
 ## UI screenshots
@@ -279,7 +280,7 @@ _Figure 2: Interact tab after pre-querying a URL for interactive elements._
 
 _Figure 3: Plan tab with use-case buttons for Login and Search and an LLM-generated action plan._
 
-# 5. REST API usage
+# 5-minute REST example
 
 The REST gateway is the preferred interface for conventional applications, Python services, LangGraph HTTP nodes, shell scripts, and integrations that already use HTTP APIs.
 
@@ -287,7 +288,7 @@ Set the gateway key once for shell examples:
 
 ```bash
 export WRS_KEY='replace-with-your-GATEWAY_API_KEY'
-export WRS='http://127.0.0.1:8084'
+export WRS='http://127.0.0.1:8080'
 ```
 
 All gateway requests use:
@@ -833,21 +834,18 @@ curl -sS "$WRS/v1/extract" \
 Create, navigate, act, and close. Use explicit selectors or accessible text descriptions.
 
 ```bash
-# Step 1: create
-SESSION_ID=$(curl -sS "$WRS/v1/interact/sessions" \
+## Step 1: createSESSION_ID=$(curl -sS "$WRS/v1/interact/sessions" \
   -X POST \
   -H "Authorization: Bearer $WRS_KEY" \
   -H 'Content-Type: application/json' \
   -d '{}' | jq -r '.session_id')
 
-# Step 2: navigate
-curl -sS "$WRS/v1/interact/sessions/$SESSION_ID/navigate" \
+## Step 2: navigatecurl -sS "$WRS/v1/interact/sessions/$SESSION_ID/navigate" \
   -H "Authorization: Bearer $WRS_KEY" \
   -H 'Content-Type: application/json' \
   -d '{"url": "https://www.princess.com", "wait_until": "networkidle"}' | jq
 
-# Step 3: click a search link
-curl -sS "$WRS/v1/interact/sessions/$SESSION_ID/action" \
+## Step 3: click a search linkcurl -sS "$WRS/v1/interact/sessions/$SESSION_ID/action" \
   -H "Authorization: Bearer $WRS_KEY" \
   -H 'Content-Type: application/json' \
   -d '{
@@ -855,13 +853,11 @@ curl -sS "$WRS/v1/interact/sessions/$SESSION_ID/action" \
     "selector": "text=Search"
   }' | jq
 
-# Step 4: screenshot
-curl -sS "$WRS/v1/interact/sessions/$SESSION_ID/screenshot" \
+## Step 4: screenshotcurl -sS "$WRS/v1/interact/sessions/$SESSION_ID/screenshot" \
   -H "Authorization: Bearer $WRS_KEY" \
   -o screenshot.png
 
-# Step 5: close
-curl -sS "$WRS/v1/interact/sessions/$SESSION_ID" \
+## Step 5: closecurl -sS "$WRS/v1/interact/sessions/$SESSION_ID" \
   -X DELETE \
   -H "Authorization: Bearer $WRS_KEY" | jq
 ```
@@ -890,14 +886,14 @@ curl -sS "$WRS/v1/interact/sessions/$SESSION_ID/action" \
 - Use `extract` when you need a guaranteed JSON shape; use `scrape` with `json` or `product` formats for ad-hoc structured output.
 - Keep `interact` sessions short-lived and always `DELETE` them when finished.
 
-# 6. MCP usage
+# 5-minute MCP example
 
 The MCP server is an alternate interface over the **same REST gateway**. It does not maintain a second implementation of search, scrape, crawl, extract, or browser interaction.
 
 ```mermaid
 %%{init: {'theme': 'default', 'flowchart': {'useMaxWidth': true}}}%%
 flowchart TD
-    A[MCP client] --> B[http://127.0.0.1:8083/mcp]
+    A[MCP client] --> B[http://127.0.0.1:8081/mcp]
     B --> C[FastMCP server]
     C --> D[REST gateway]
     D --> E[Firecrawl]
@@ -912,7 +908,7 @@ flowchart TD
 The MCP endpoint uses **Streamable HTTP**:
 
 ```text
-http://127.0.0.1:8083/mcp
+http://127.0.0.1:8081/mcp
 ```
 
 Because the Compose file binds MCP to `127.0.0.1`, it is accessible only from the Docker host by default. This is intentional. If you expose MCP to another machine, put it behind TLS and authentication rather than simply changing the bind address.
@@ -951,7 +947,7 @@ from fastmcp import Client
 
 
 async def main():
-    async with Client("http://127.0.0.1:8083/mcp") as client:
+    async with Client("http://127.0.0.1:8081/mcp") as client:
         tools = await client.list_tools()
         print([tool.name for tool in tools])
 
@@ -1104,58 +1100,12 @@ browser_close_session
 For MCP clients that accept a Streamable HTTP URL, configure the server URL as:
 
 ```text
-http://127.0.0.1:8083/mcp
+http://127.0.0.1:8081/mcp
 ```
 
 The exact client configuration syntax varies by application. The key point is that the client connects directly to that URL; it does **not** connect to Firecrawl itself.
 
-# 7. Choosing REST vs MCP
-
-Use **REST** when:
-
-- calling from application code
-- using deterministic LangGraph nodes
-- integrating through FastAPI/httpx/curl
-- you want explicit HTTP request/response control
-- you want OpenAPI documentation
-
-Use **MCP** when:
-
-- an LLM or agent should discover tools dynamically
-- using an MCP-capable client
-- you want the model to choose among `search`, `scrape`, `extract`, and browser tools
-- you want one tool server rather than hard-coded HTTP nodes
-
-Both interfaces reach the same underlying services.
-
-# 8. LangGraph integration
-
-For deterministic LangGraph nodes, point all web-research HTTP calls at:
-
-```text
-http://<docker-host>:8084
-```
-
-Do not let individual nodes depend directly on Firecrawl's URL. For example:
-
-```text
-search node   -> POST /v1/search
-map node      -> POST /v1/map
-scrape node   -> POST /v1/scrape
-crawl node    -> POST /v1/crawl
-extract node  -> POST /v1/extract
-interact node -> /v1/interact/...
-```
-
-For an MCP-driven agent, connect the MCP client to:
-
-```text
-http://<docker-host>:8083/mcp
-```
-
-This separation lets you replace a backend later without rewriting the graph.
-
-# 9. Security model
+# Security model
 
 ## Gateway API key
 
@@ -1206,79 +1156,53 @@ The interaction service applies a conservative text-based policy to clicks that 
 
 An agent should set this only after the application has obtained explicit user approval for that action.
 
-# 10. Health and troubleshooting
+# Choosing REST vs MCP
 
-## Gateway
+Use **REST** when:
 
-```bash
-curl -sS http://127.0.0.1:8084/health | jq
+- calling from application code
+- using deterministic LangGraph nodes
+- integrating through FastAPI/httpx/curl
+- you want explicit HTTP request/response control
+- you want OpenAPI documentation
+
+Use **MCP** when:
+
+- an LLM or agent should discover tools dynamically
+- using an MCP-capable client
+- you want the model to choose among `search`, `scrape`, `extract`, and browser tools
+- you want one tool server rather than hard-coded HTTP nodes
+
+Both interfaces reach the same underlying services.
+
+# LangGraph integration
+
+For deterministic LangGraph nodes, point all web-research HTTP calls at:
+
+```text
+http://<docker-host>:8080
 ```
 
-If you enabled `GATEWAY_API_KEY` and your middleware requires it for health in a future version, add the Authorization header.
+Do not let individual nodes depend directly on Firecrawl's URL. For example:
 
-## Verify Ollama from the extract container
-
-```bash
-docker compose exec extract python - <<'PY'
-import urllib.request
-print(urllib.request.urlopen('http://host.docker.internal:11434/api/tags', timeout=5).read()[:500])
-PY
+```text
+search node   -> POST /v1/search
+map node      -> POST /v1/map
+scrape node   -> POST /v1/scrape
+crawl node    -> POST /v1/crawl
+extract node  -> POST /v1/extract
+interact node -> /v1/interact/...
 ```
 
-## Verify SearXNG from Firecrawl
+For an MCP-driven agent, connect the MCP client to:
 
-```bash
-docker compose exec firecrawl-api node -e \
-  "fetch('http://host.docker.internal:8088/search?q=test&format=json').then(r=>{console.log(r.status);return r.text()}).then(t=>console.log(t.slice(0,500))).catch(e=>{console.error(e);process.exit(1)})"
+```text
+http://<docker-host>:8081/mcp
 ```
 
-## Search returns no results
+This separation lets you replace a backend later without rewriting the graph.
 
-Check SearXNG directly:
-
-```bash
-curl -sS 'http://127.0.0.1:8088/search?q=test&format=json' | jq '.results | length'
-```
-
-Then inspect Firecrawl logs:
-
-```bash
-docker compose logs --tail=200 firecrawl-api
-```
-
-Confirm:
-
-```bash
-docker compose exec firecrawl-api env | grep '^SEARXNG_'
-```
-
-## Extraction fails
-
-Confirm Ollama sees the model:
-
-```bash
-curl -sS http://127.0.0.1:11434/api/tags | jq -r '.models[].name'
-```
-
-Then:
-
-```bash
-docker compose logs --tail=200 extract
-```
-
-## Browser fails to start
-
-```bash
-docker compose logs --tail=200 interact
-```
-
-The interact container uses a Playwright image/runtime and a `1gb` shared-memory allocation.
-
-## Request correlation
-
-The gateway creates/preserves an `x-request-id` and forwards it to downstream services. Use that identifier when correlating gateway, extract, and interact logs.
-
-# 11. Tests
+# Testing
 
 The project includes both **unit/regression tests** and **live end-to-end test scripts**. The live tests exercise the actual running REST gateway, Firecrawl, external SearXNG, external Ollama, Playwright interaction service, and MCP server.
 
@@ -1295,8 +1219,8 @@ The live shell tests require `curl`, `python3`, and Docker. They automatically r
 By default the end-to-end tests use:
 
 ```text
-REST gateway:  http://127.0.0.1:8084
-MCP endpoint:  http://127.0.0.1:8083/mcp
+REST gateway:  http://127.0.0.1:8080
+MCP endpoint:  http://127.0.0.1:8081/mcp
 Public test URL: https://example.com
 Search query:   example domain
 ```
@@ -1304,8 +1228,8 @@ Search query:   example domain
 Override them when needed:
 
 ```bash
-GATEWAY_URL=http://127.0.0.1:8084 \
-MCP_URL=http://127.0.0.1:8083/mcp \
+GATEWAY_URL=http://127.0.0.1:8080 \
+MCP_URL=http://127.0.0.1:8081/mcp \
 TEST_URL=https://www.iana.org \
 SEARCH_QUERY='IANA reserved domains' \
 ./scripts/test-all.sh
@@ -1464,7 +1388,79 @@ ALL TESTS PASSED
 
 These tests are intentionally kept separate: unit tests are fast and deterministic, while live tests prove that the deployed services and your existing Ollama/SearXNG endpoints actually work together.
 
-# 12. Production recommendations
+# Operations and troubleshooting
+
+## Gateway
+
+```bash
+curl -sS http://127.0.0.1:8080/health | jq
+```
+
+If you enabled `GATEWAY_API_KEY` and your middleware requires it for health in a future version, add the Authorization header.
+
+## Verify Ollama from the extract container
+
+```bash
+docker compose exec extract python - <<'PY'
+import urllib.request
+print(urllib.request.urlopen('http://host.docker.internal:11434/api/tags', timeout=5).read()[:500])
+PY
+```
+
+## Verify SearXNG from Firecrawl
+
+```bash
+docker compose exec firecrawl-api node -e \
+  "fetch('http://host.docker.internal:8088/search?q=test&format=json').then(r=>{console.log(r.status);return r.text()}).then(t=>console.log(t.slice(0,500))).catch(e=>{console.error(e);process.exit(1)})"
+```
+
+## Search returns no results
+
+Check SearXNG directly:
+
+```bash
+curl -sS 'http://127.0.0.1:8088/search?q=test&format=json' | jq '.results | length'
+```
+
+Then inspect Firecrawl logs:
+
+```bash
+docker compose logs --tail=200 firecrawl-api
+```
+
+Confirm:
+
+```bash
+docker compose exec firecrawl-api env | grep '^SEARXNG_'
+```
+
+## Extraction fails
+
+Confirm Ollama sees the model:
+
+```bash
+curl -sS http://127.0.0.1:11434/api/tags | jq -r '.models[].name'
+```
+
+Then:
+
+```bash
+docker compose logs --tail=200 extract
+```
+
+## Browser fails to start
+
+```bash
+docker compose logs --tail=200 interact
+```
+
+The interact container uses a Playwright image/runtime and a `1gb` shared-memory allocation.
+
+## Request correlation
+
+The gateway creates/preserves an `x-request-id` and forwards it to downstream services. Use that identifier when correlating gateway, extract, and interact logs.
+
+# Production recommendations
 
 Before exposing the stack outside a trusted host/network:
 
@@ -1481,14 +1477,14 @@ Before exposing the stack outside a trusted host/network:
 11. Test upgrades in a staging Compose project before changing production.
 12. Keep Ollama and SearXNG independently managed so this stack can be upgraded without replacing them.
 
-# 13. Capability summary
+# Capability summary
 
 Once running, you have a single self-hosted web-research layer with both REST and MCP access:
 
 ```mermaid
 %%{init: {'theme': 'default', 'flowchart': {'useMaxWidth': true}}}%%
 flowchart TD
-    A[Web Research Stack] --> B[Discovery]
+    A[Web Research] --> B[Discovery]
     A --> C[Content]
     A --> D[Interaction]
     B --> E[search · map]
@@ -1499,4 +1495,4 @@ flowchart TD
     G --> J[(Playwright)]
 ```
 
-Application code can therefore depend on the **Web Research Stack contract** rather than directly on Firecrawl, SearXNG, Ollama, or Playwright.
+Application code can therefore depend on the **Web Research contract** rather than directly on Firecrawl, SearXNG, Ollama, or Playwright.
