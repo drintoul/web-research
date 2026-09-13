@@ -33,8 +33,8 @@ I then wanted a single, stable API contract rather than maintaining two separate
 %%{init: {'theme': 'default', 'flowchart': {'useMaxWidth': true, 'htmlLabels': true}}}%%
 flowchart TD
     A[Applications / Agents]
-    B[REST API<br/>:8084]
-    C[MCP Server<br/>:8083]
+    B[REST API<br/>:8080]
+    C[MCP Server<br/>:8081]
     D[Unified Gateway]
     E[Firecrawl<br/>search · map · scrape · crawl]
     F[Extract<br/>structured JSON]
