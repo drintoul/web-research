@@ -224,16 +224,7 @@ def _get_ui_html() -> str:
 
 
 def _ui_response() -> HTMLResponse:
-    response = HTMLResponse(_get_ui_html())
-    key = os.getenv("GATEWAY_API_KEY", "").strip()
-    if key:
-        response.set_cookie(
-            key="gateway_api_key",
-            value=key,
-            httponly=True,
-            samesite="strict",
-        )
-    return response
+    return HTMLResponse(_get_ui_html())
 
 
 @app.get("/ui", response_class=HTMLResponse)

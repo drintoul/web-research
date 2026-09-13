@@ -27,8 +27,6 @@ class OptionalApiKeyMiddleware(BaseHTTPMiddleware):
                 supplied = supplied[7:]
             else:
                 supplied = request.headers.get("x-api-key", "")
-            if not supplied:
-                supplied = request.cookies.get("gateway_api_key", "")
             if supplied != expected:
                 return JSONResponse({"detail": "Unauthorized"}, status_code=401)
         return await call_next(request)

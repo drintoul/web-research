@@ -1,5 +1,6 @@
 import hashlib
 import json
+import logging
 import os
 from datetime import datetime, timezone
 from typing import Any
@@ -13,6 +14,7 @@ from common.http import RequestContextMiddleware
 from common.logging import configure_logging
 
 configure_logging("extract")
+_logger = logging.getLogger("extract")
 
 OLLAMA = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434").rstrip("/")
 DEFAULT_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:14b")
@@ -110,6 +112,10 @@ async def extract(req: ExtractRequest):
                     "generated_at": datetime.now(timezone.utc).isoformat(),
                 },
             }
+        except httpx.HTTPStatusError as exc:
+            body = exc.response.text[:2000]
+            _logger.warning("Ollama chat returned %s: %s", exc.response.status_code, body)
+            last_error = f"Ollama HTTP {exc.response.status_code}: {body}"
         except (httpx.HTTPError, KeyError, json.JSONDecodeError) as exc:
             last_error = str(exc)
 

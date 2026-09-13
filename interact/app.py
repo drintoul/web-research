@@ -53,7 +53,7 @@ class ActionRequest(BaseModel):
     action: Literal["click", "type", "press", "select", "wait", "scroll"]
     selector: str | None = None
     description: str | None = None
-    value: str | None = None
+    value: str | int | None = None
     key: str | None = None
     timeout_ms: int = Field(default=10000, ge=100, le=60000)
     allow_consequential: bool = False
@@ -281,13 +281,13 @@ async def action(session_id: str, req: ActionRequest):
         elif req.action == "type":
             if req.value is None:
                 raise HTTPException(422, "value is required for type")
-            await locator.fill(req.value, timeout=req.timeout_ms)
+            await locator.fill(str(req.value), timeout=req.timeout_ms)
         elif req.action == "press":
-            await locator.press(req.key or req.value or "Enter", timeout=req.timeout_ms)
+            await locator.press(req.key or str(req.value) or "Enter", timeout=req.timeout_ms)
         elif req.action == "select":
             if req.value is None:
                 raise HTTPException(422, "value is required for select")
-            await locator.select_option(req.value, timeout=req.timeout_ms)
+            await locator.select_option(str(req.value), timeout=req.timeout_ms)
         else:
             raise HTTPException(422, "Unsupported action")
     except HTTPException:
