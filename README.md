@@ -213,15 +213,13 @@ You must then attach the relevant Web Research containers to that external Docke
 
 ## Firecrawl versioning
 
-The example `.env` allows:
+The `docker-compose.yaml` pins the Firecrawl, Playwright, Redis, RabbitMQ, and Firecrawl Postgres images to exact digests:
 
-```dotenv
-FIRECRAWL_VERSION=latest
+```yaml
+image: ghcr.io/firecrawl/firecrawl@sha256:92ee28c20a0dc64e7605ea0edb33e0ea75b7127e34b9c1bc0cabea473b4f7d98
 ```
 
-That is convenient for an initial test, but production deployments should use an exact Firecrawl release or image digest you have tested.
-
-Firecrawl's own self-hosting guidance recommends keeping the Compose configuration aligned with the release you deploy. Its internal service topology and environment variables can change across releases.
+This ensures a tested, immutable environment. To upgrade, replace each `image:` value with a newer release or image digest you have validated, then rebuild.
 
 ## Start the stack
 

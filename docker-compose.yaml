@@ -148,7 +148,7 @@ services:
 
   firecrawl-api:
     container_name: web-research-firecrawl-api
-    image: ${FIRECRAWL_API_IMAGE}:${FIRECRAWL_VERSION}
+    image: ghcr.io/firecrawl/firecrawl@sha256:92ee28c20a0dc64e7605ea0edb33e0ea75b7127e34b9c1bc0cabea473b4f7d98
     command: node dist/src/harness.js --start-docker
     environment:
       <<: *firecrawl-env
@@ -183,7 +183,7 @@ services:
 
   firecrawl-playwright:
     container_name: web-research-firecrawl-playwright
-    image: ${FIRECRAWL_PLAYWRIGHT_IMAGE}:${FIRECRAWL_VERSION}
+    image: ghcr.io/firecrawl/playwright-service@sha256:df1a393ce8bfc3801570a826a9b0dcc400ae48789adb4a0ad9d6cbf0229b059b
     environment:
       PORT: 3000
       BLOCK_MEDIA: ${BLOCK_MEDIA}
@@ -196,7 +196,7 @@ services:
 
   redis:
     container_name: web-research-redis
-    image: redis:7-alpine
+    image: redis:7-alpine@sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2
     command: redis-server --appendonly yes
     volumes:
       - type: bind
@@ -207,7 +207,7 @@ services:
 
   rabbitmq:
     container_name: web-research-rabbitmq
-    image: rabbitmq:3-management-alpine
+    image: rabbitmq:3-management-alpine@sha256:606d8c0d6b3c18d1da9afc53bc7cdb2a8d5486df91b5a9830e9e07626c9ae281
     volumes:
       - type: bind
         source: ./data/rabbitmq
@@ -223,7 +223,7 @@ services:
 
   firecrawl-postgres:
     container_name: web-research-firecrawl-postgres
-    image: ${FIRECRAWL_NUQ_POSTGRES_IMAGE}:${FIRECRAWL_VERSION}
+    image: ghcr.io/firecrawl/nuq-postgres@sha256:aed86f62858f29bd971abddcdeb301c12888098d2cf5d33c1ba42b053bc460f6
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}

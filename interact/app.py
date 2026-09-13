@@ -61,6 +61,9 @@ class ActionRequest(BaseModel):
 
 async def _guard_route(route):
     req = route.request
+    if req.resource_type == "websocket":
+        await route.abort()
+        return
     if BLOCK_MEDIA and req.resource_type in {"image", "media", "font"}:
         await route.abort()
         return
@@ -72,17 +75,33 @@ async def _guard_route(route):
     await route.continue_()
 
 
+async def _close_websocket(ws):
+    try:
+        await ws.close()
+    except Exception:
+        pass
+
+
+def _on_websocket(ws):
+    asyncio.create_task(_close_websocket(ws))
+
+
 async def _new_session() -> tuple[str, Session]:
     if _browser is None:
         raise HTTPException(503, "Browser not ready")
     async with _lock:
         if len(_sessions) >= MAX_SESSIONS:
             raise HTTPException(429, "Maximum browser sessions reached")
-        context = await _browser.new_context(ignore_https_errors=False, accept_downloads=False)
+        context = await _browser.new_context(
+            ignore_https_errors=False,
+            accept_downloads=False,
+            service_workers="block",
+        )
         page = await context.new_page()
         page.set_default_timeout(10000)
         page.set_default_navigation_timeout(NAV_TIMEOUT)
-        await page.route("**/*", _guard_route)
+        await context.route("**/*", _guard_route)
+        context.on("websocket", _on_websocket)
         session_id = str(uuid.uuid4())
         session = Session(context=context, page=page, touched=time.monotonic())
         _sessions[session_id] = session

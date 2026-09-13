@@ -1,7 +1,9 @@
 import socket
+from unittest.mock import AsyncMock
 
 import pytest
 
+from interact.app import _guard_route
 from interact.security import UnsafeUrl, is_consequential, validate_public_url
 
 
@@ -11,8 +13,20 @@ from interact.security import UnsafeUrl, is_consequential, validate_public_url
     'http://10.0.0.1/',
     'http://192.168.1.1/',
     'http://169.254.169.254/latest/meta-data/',
+    'http://[::1]/',
+    'http://[::ffff:127.0.0.1]/',
+    'http://[fc00::1]/',
+    'http://[fd00::1]/',
+    'http://[fe80::1]/',
+    'http://[ff02::1]/',
+    'http://[::]/',
+    'http://0.0.0.0/',
+    'http://255.255.255.255/',
+    'http://127.0.0.1:8080/',
     'file:///etc/passwd',
     'ftp://example.com/file',
+    'ws://127.0.0.1/',
+    'wss://127.0.0.1/',
 ])
 async def test_ssrf_blocks_private_and_non_http(url):
     with pytest.raises(UnsafeUrl):
@@ -55,3 +69,41 @@ def test_consequential_detection():
         assert is_consequential(text)
     assert not is_consequential('View details')
     assert not is_consequential('Read more')
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('url', [
+    'http://127.0.0.1/',
+    'http://169.254.169.254/latest/meta-data/',
+    'http://[::1]/',
+    'http://[::ffff:127.0.0.1]/',
+    'http://[fc00::1]/',
+])
+async def test_guard_route_blocks_private_url(url):
+    route = AsyncMock()
+    route.request.url = url
+    route.request.resource_type = 'document'
+    await _guard_route(route)
+    route.abort.assert_awaited_once()
+    route.continue_.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('resource_type', ['document', 'xhr', 'fetch', 'other', 'websocket'])
+async def test_guard_route_blocks_private_for_all_resource_types(resource_type):
+    route = AsyncMock()
+    route.request.url = 'http://127.0.0.1:8080/private'
+    route.request.resource_type = resource_type
+    await _guard_route(route)
+    route.abort.assert_awaited_once()
+    route.continue_.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_guard_route_allows_public_destination():
+    route = AsyncMock()
+    route.request.url = 'https://1.1.1.1/'
+    route.request.resource_type = 'document'
+    await _guard_route(route)
+    route.abort.assert_not_awaited()
+    route.continue_.assert_awaited_once()
