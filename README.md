@@ -80,25 +80,32 @@ agents.
 
 The result is a stable **Web Research contract**:
 
-``` text
-Applications / Agents
-        |
-   +----+----+
-   |         |
- REST       MCP
-   |         |
-   +----+----+
-        |
-     Gateway
-        |
-  +-----+------+---------+
-  |            |         |
-Firecrawl    Extract   Interact
-  |            |         |
-SearXNG      Ollama   Playwright
-                         |
-                       Ollama
-                  when ambiguity requires it
+``` mermaid
+%%{init: {'theme': 'default', 'flowchart': {'useMaxWidth': true}}}%%
+flowchart TD
+    A[Applications / Agents]
+    B[REST API :8080]
+    C[MCP Server :8081]
+    D[Unified Gateway]
+    E[Firecrawl search · map · scrape · crawl]
+    F[Extract structured JSON]
+    G[Interact Playwright]
+    H[(Existing SearXNG)]
+    I[(Existing Ollama)]
+    J[Playwright browser sessions]
+    K[(Ollama optional)]
+
+    A --> B
+    A --> C
+    B --> D
+    C --> D
+    D --> E
+    D --> F
+    D --> G
+    E --> H
+    F --> I
+    G --> J
+    G -.-> K
 ```
 
 Application code does not need to know which backend implements each
