@@ -1,35 +1,112 @@
+
 # Web Research
 
-A self-hosted web research platform that exposes one stable set of web research endpoints (REST and MCP) for search, discovery, scraping, crawling, structured extraction, and browser interaction, plus a built-in Web UI for exercising all endpoints.
+A self-hosted web research platform that exposes one stable set of
+**REST** and **MCP** interfaces for search, site discovery, scraping,
+crawling, structured extraction, and stateful browser interaction.
 
-The stack deliberately combines several specialized services rather than trying to make one component do everything:
+The project combines specialized services rather than forcing one
+component to do everything:
 
-| Capability | Implementation |
-|---|---|
-| Search | Self-hosted Firecrawl using your existing SearXNG endpoint |
-| Map | Self-hosted Firecrawl |
-| Scrape | Self-hosted Firecrawl |
-| Crawl | Self-hosted Firecrawl |
-| Extract | Dedicated FastAPI service using your existing Ollama endpoint + JSON Schema validation |
-| Interact | Dedicated Playwright browser-automation service, with optional Ollama selector resolution |
-| REST | Unified FastAPI gateway on port `8080` |
-| MCP | FastMCP server exposing the same capabilities on port `8081` |
-| Test UI | Served by the gateway at `/ui` for manually testing REST and MCP endpoints |
+  -----------------------------------------------------------------------
+  Capability                          Implementation
+  ----------------------------------- -----------------------------------
+  Search                              Self-hosted Firecrawl using an
+                                      existing SearXNG endpoint
 
-> **Important:** this Compose project does **not** start Ollama or SearXNG. It is designed to reuse the Ollama and SearXNG instances you already run separately.
+  Map                                 Self-hosted Firecrawl
 
-## Why did I build this?
+  Scrape                              Self-hosted Firecrawl
 
-The self-hosted version of Firecrawl provides excellent search, map, scrape, and crawl endpoints, but it does **not** support the `extract` or `interact` features that the cloud-hosted (paid) service offers. I wanted both capabilities without depending on a SaaS bill, so I added two dedicated services:
+  Crawl                               Self-hosted Firecrawl
 
-- **Extract:** a FastAPI service that calls my existing Ollama endpoint and validates the response against a caller-supplied JSON Schema, with bounded retry on invalid output.
-- **Interact:** a Playwright browser-automation service for stateful navigation, clicking, typing, selecting, scrolling, reading text, and capturing screenshots.
+  Extract                             Dedicated FastAPI service using an
+                                      existing Ollama endpoint + JSON
+                                      Schema validation
 
-I then wanted a single, stable API contract rather than maintaining two separate stacks, so the gateway exposes everything as **REST**, and the **MCP** server is a thin, stateful wrapper that routes the same calls through the same gateway. This means any improvement, bug fix, or new endpoint only needs to be added once.
+  Interact                            Dedicated Playwright
+                                      browser-automation service, with
+                                      optional Ollama selector resolution
+
+  REST                                Unified FastAPI gateway on port
+                                      `8080`
+
+  MCP                                 FastMCP server exposing the same
+                                      capabilities on port `8081`
+
+  Test UI                             Served by the gateway at `/ui` for
+                                      manually exercising the platform
+  -----------------------------------------------------------------------
+
+> **Important:** this Compose project does **not** start Ollama or
+> SearXNG. It is designed to reuse Ollama and SearXNG instances that are
+> already running separately.
+
+## Contents
+
+-   [Why I built this](#why-i-built-this)
+-   [Architecture](#architecture)
+-   [Design principles](#design-principles)
+-   [Project layout](#project-layout)
+-   [Quick Start](#quick-start)
+-   [Web UI](#web-ui)
+-   [REST API](#rest-api)
+-   [MCP](#mcp)
+-   [Choosing REST vs MCP](#choosing-rest-vs-mcp)
+-   [LangGraph integration](#langgraph-integration)
+-   [Security](#security)
+-   [Testing](#testing)
+-   [Operations and troubleshooting](#operations-and-troubleshooting)
+-   [Production recommendations](#production-recommendations)
+-   [Capability summary](#capability-summary)
+
+## Why I built this
+
+Self-hosted Firecrawl provides strong search, map, scrape, and crawl
+primitives. I wanted to add two capabilities to my self-hosted research
+environment without making application code depend directly on multiple
+backends:
+
+-   **Extract** --- structured extraction through an existing Ollama
+    service, validated against a caller-supplied JSON Schema with
+    bounded retry.
+-   **Interact** --- stateful browser automation through Playwright for
+    navigation, clicking, typing, selecting, scrolling, reading page
+    text, and screenshots.
+
+A unified gateway then exposes the complete capability set as REST. A
+FastMCP server exposes the same backend capabilities to MCP clients and
+agents.
+
+The result is a stable **Web Research contract**:
+
+``` text
+Applications / Agents
+        |
+   +----+----+
+   |         |
+ REST       MCP
+   |         |
+   +----+----+
+        |
+     Gateway
+        |
+  +-----+------+---------+
+  |            |         |
+Firecrawl    Extract   Interact
+  |            |         |
+SearXNG      Ollama   Playwright
+                         |
+                       Ollama
+                  when ambiguity requires it
+```
+
+Application code does not need to know which backend implements each
+capability.
 
 ## Architecture
 
-```mermaid
+``` mermaid
 %%{init: {'theme': 'default', 'flowchart': {'useMaxWidth': true, 'htmlLabels': true}}}%%
 flowchart TD
     A[Applications / Agents]
@@ -39,10 +116,11 @@ flowchart TD
     E[Firecrawl<br/>search · map · scrape · crawl]
     F[Extract<br/>structured JSON]
     G[Interact<br/>Playwright]
-    H[(SearXNG)]
-    I[(Ollama)]
-    J[Playwright page rendering]
-    K[Playwright sessions]
+    H[(Existing SearXNG)]
+    I[(Existing Ollama)]
+    J[Firecrawl Playwright]
+    K[Isolated browser sessions]
+
     A --> B
     A --> C
     B --> D
@@ -53,38 +131,57 @@ flowchart TD
     E --> H
     E -.-> J
     F --> I
-    G --> I
+    G -.-> I
     G --> K
 ```
 
-External existing services:
-- **Ollama** → `http://host.docker.internal:11434`
-- **SearXNG** → `http://host.docker.internal:8088`
+Default external-service addresses:
 
-Firecrawl also runs its own internal Playwright service for page scraping. The `interact` service is separate and exists specifically for stateful browser automation such as navigating, clicking, typing, selecting, scrolling, reading page text, and taking screenshots.
+``` text
+Ollama:  http://host.docker.internal:11434
+SearXNG: http://host.docker.internal:8088
+```
+
+Firecrawl also runs its own internal Playwright service for page
+rendering during scraping. The separate `interact` service exists
+specifically for **stateful browser automation**.
 
 ## Design principles
 
-- **One stable contract:** application code talks to the gateway rather than directly to Firecrawl, Ollama, or Playwright.
-- **REST and MCP use the same backend logic:** the MCP server calls the REST gateway instead of duplicating implementation code.
-- **External Ollama and SearXNG:** existing services are reused instead of creating duplicate containers.
-- **Deterministic first:** browser interaction uses explicit selectors and accessible text before asking an LLM to resolve ambiguity.
-- **Structured extraction:** Ollama output is validated against the caller's JSON Schema and retried when invalid.
-- **Evidence preservation:** extract responses include source/provenance metadata.
-- **Browser isolation:** each interact session receives its own Playwright browser context with a TTL.
-- **SSRF controls:** browser navigation and subrequests reject private/internal destinations by default.
-- **Conservative automation:** potentially consequential clicks are blocked unless explicitly allowed.
-- **Private dependencies:** Redis, RabbitMQ, PostgreSQL, Firecrawl workers, and both Playwright services are not published to the host.
+-   **One stable contract** --- callers use Web Research rather than
+    directly coupling to Firecrawl, Ollama, SearXNG, or Playwright.
+-   **REST and MCP share backend behavior** --- MCP delegates through
+    the gateway rather than duplicating the implementation.
+-   **Reuse existing infrastructure** --- Ollama and SearXNG remain
+    independently managed services.
+-   **Deterministic first** --- browser interaction prefers explicit
+    selectors and accessible text before using an LLM to resolve
+    ambiguity.
+-   **Structured extraction** --- Ollama output is validated against
+    caller-supplied JSON Schema.
+-   **Evidence preservation** --- extraction responses include
+    provenance metadata.
+-   **Browser isolation** --- each interaction session receives an
+    isolated Playwright browser context with a TTL.
+-   **Network containment** --- browser navigation and subrequests are
+    checked against SSRF policy; private/internal destinations are
+    rejected by default.
+-   **Conservative automation** --- potentially consequential **clicks**
+    are blocked unless the caller explicitly allows them.
+-   **Private dependencies** --- Firecrawl workers, Redis, RabbitMQ,
+    PostgreSQL, Extract, Interact, and Playwright services are not
+    published to the host.
+-   **Reproducible infrastructure** --- third-party container images are
+    pinned to tested immutable digests in `docker-compose.yaml`.
 
 ## Project layout
 
-```text
+``` text
 web-research/
 ├── docker-compose.yaml
 ├── .env.example
 ├── .dockerignore
 ├── .gitignore
-├── data/      # runtime bind mounts (gitignored)
 ├── Dockerfile.python
 ├── requirements.txt
 ├── Makefile
@@ -120,60 +217,75 @@ web-research/
     └── ci.yml
 ```
 
+Runtime data is stored under `data/` and is excluded from Git.
+
 # Quick Start
+
 ## Prerequisites
 
 You need:
 
-- Docker Engine
-- Docker Compose v2
-- an existing Ollama service
-- an existing SearXNG service with JSON output enabled
-- at least one Ollama model suitable for structured JSON, such as `qwen2.5:14b`
+-   Docker Engine
+-   Docker Compose v2
+-   `curl`
+-   `jq` for the shell examples
+-   an existing Ollama service
+-   an existing SearXNG service with JSON output enabled
+-   at least one Ollama model suitable for structured JSON, such as
+    `qwen2.5:14b`
 
-This project assumes your existing services are reachable from Docker containers through host-published ports:
+The default configuration assumes the existing services are reachable
+from Docker containers through host-published ports:
 
-```text
+``` text
 Ollama:  http://host.docker.internal:11434
 SearXNG: http://host.docker.internal:8088
 ```
 
-On Linux, the Compose services that need these addresses include:
+On Linux, services that need host access use:
 
-```yaml
+``` yaml
 extra_hosts:
   - "host.docker.internal:host-gateway"
 ```
 
-That lets the Web Research use separate containers without requiring them to belong to the same Compose project or Docker network.
+This keeps Web Research independent of the Compose projects that run
+Ollama and SearXNG.
 
-## Verify the existing services first
+## Verify existing services
 
-From the Docker host:
+From the Docker host, verify Ollama:
 
-```bash
+``` bash
 curl -sS http://127.0.0.1:11434/api/tags | jq
 ```
 
-For SearXNG:
+Verify SearXNG:
 
-```bash
-curl -sS 'http://127.0.0.1:8088/search?q=firecrawl&format=json' | jq '.results[:2]'
+``` bash
+curl -sS 'http://127.0.0.1:8088/search?q=firecrawl&format=json' \
+  | jq '.results[:2]'
 ```
 
-If either command fails, fix that service before starting this project.
+If either fails, fix that service before starting Web Research.
 
-## Configuration
+## Configure
 
 Create the environment file:
 
-```bash
+``` bash
 cp .env.example .env
 ```
 
-At minimum review these settings:
+Generate a gateway key:
 
-```dotenv
+``` bash
+openssl rand -hex 32
+```
+
+At minimum, review:
+
+``` dotenv
 GATEWAY_API_KEY=replace-with-a-long-random-value
 POSTGRES_PASSWORD=replace-this-postgres-password
 
@@ -185,137 +297,199 @@ SEARXNG_ENGINES=
 SEARXNG_CATEGORIES=general
 ```
 
-`SEARXNG_ENDPOINT` is passed to Firecrawl, so `/v1/search` uses the SearXNG instance you already operate.
+`SEARXNG_ENDPOINT` is passed to Firecrawl, so `/v1/search` uses the
+SearXNG instance you already operate.
 
-`OLLAMA_BASE_URL` is used directly by the dedicated `extract` service and by `interact` only when selector ambiguity requires LLM assistance.
+`OLLAMA_BASE_URL` is used by the dedicated Extract service and by
+Interact only when selector ambiguity requires LLM assistance.
 
-The project does **not** create an `ollama` service or a `searxng` service in `docker-compose.yaml`.
+> Keep `GATEWAY_API_KEY` configured for normal use. If the
+> implementation permits a blank key, treat that only as an explicitly
+> trusted-host/development mode. Do not expose an unauthenticated
+> gateway to a LAN, tunnel, reverse proxy, or public network.
 
-## If Ollama or SearXNG use different ports
+Do not commit `.env`.
 
-Simply change the environment values:
+### Different Ollama or SearXNG ports
 
-```dotenv
+Change only the environment values:
+
+``` dotenv
 OLLAMA_BASE_URL=http://host.docker.internal:11435
 SEARXNG_ENDPOINT=http://host.docker.internal:8888
 ```
 
-## If you prefer container DNS names
+### Use Docker DNS instead
 
-If your existing services share an external Docker network with this project, you can instead use addresses such as:
+If the existing services share an external Docker network with this
+project, addresses can instead look like:
 
-```dotenv
+``` dotenv
 OLLAMA_BASE_URL=http://ollama:11434
 SEARXNG_ENDPOINT=http://searxng:8080
 ```
 
-You must then attach the relevant Web Research containers to that external Docker network. The supplied configuration uses host-published ports because it keeps the projects independent and requires no shared-network naming convention.
+Attach the relevant Web Research containers to that external network.
+The supplied configuration uses host-published ports to keep the
+projects independent.
 
-## Firecrawl versioning
+## Image versioning
 
-The `docker-compose.yaml` pins the Firecrawl, Playwright, Redis, RabbitMQ, and Firecrawl Postgres images to exact digests:
+`docker-compose.yaml` pins Firecrawl and supporting third-party
+infrastructure images to tested immutable image digests.
 
-```yaml
-image: ghcr.io/firecrawl/firecrawl@sha256:92ee28c20a0dc64e7605ea0edb33e0ea75b7127e34b9c1bc0cabea473b4f7d98
+Example:
+
+``` yaml
+image: ghcr.io/firecrawl/firecrawl@sha256:<tested-digest>
 ```
 
-This ensures a tested, immutable environment. To upgrade, replace each `image:` value with a newer release or image digest you have validated, then rebuild.
+Do not casually replace pinned digests with `latest` in a production
+deployment. Test upgrades first, update the digest deliberately, then
+run the complete regression suite.
 
-## Start the stack
+## Start
 
-Validate the Compose file first:
+Validate Compose:
 
-```bash
+``` bash
 docker compose config
 ```
 
 Build and start:
 
-```bash
+``` bash
 docker compose up -d --build
 ```
 
 or:
 
-```bash
+``` bash
 make up
 ```
 
-Inspect status:
+Check status:
 
-```bash
+``` bash
 docker compose ps
 ```
 
 Follow logs:
 
-```bash
+``` bash
 docker compose logs -f --tail=200
 ```
 
-The public interfaces are bound to loopback by default:
+Default interfaces:
 
-```text
+``` text
 REST API:    http://127.0.0.1:8080
 OpenAPI UI:  http://127.0.0.1:8080/docs
 MCP server:  http://127.0.0.1:8081/mcp
-Web UI:      http://127.0.0.1:8080/ui  (test/exercise all endpoints; auth required to send requests)
+Web UI:      http://127.0.0.1:8080/ui
 ```
+
+The published interfaces bind to loopback by default.
+
+# Web UI
+
+The built-in UI is intended for development, testing, and manually
+exercising the Web Research endpoints. It does not replace the REST or
+MCP interfaces.
+
+Open:
+
+``` text
+http://127.0.0.1:8080/ui
+```
+
+When authentication is enabled, supply the configured gateway API key in
+the UI. The UI should send the credential with API requests; the server
+does not need to embed the secret into the page.
 
 ## UI screenshots
 
-The following placeholder images document the test UI once screenshots are captured. Replace the placeholder paths with the actual files.
+> **Screenshots intentionally pending.** The UI is still being refined.
+> These paths are reserved so the final screenshots can be added without
+> restructuring the README.
 
-![MCP tab showing the initialize / list tools / call tool flow](docs/screenshots/mcp-tab.png)
+![MCP tab showing the initialize / list tools / call tool
+flow](docs/screenshots/mcp-tab.png)
 
-_Figure 1: MCP tab with a session-aware step flow and the tool name / parameters form._
+*Figure 1: MCP tab with the session-aware initialize, list-tools, and
+call-tool flow.*
 
-![Interact tab showing the browser session flow and interactive element list](docs/screenshots/interact-tab.png)
+![Interact tab showing the browser session flow and interactive element
+list](docs/screenshots/interact-tab.png)
 
-_Figure 2: Interact tab after pre-querying a URL for interactive elements._
+*Figure 2: Interact tab showing a stateful browser session and
+discovered interactive elements.*
 
-![Interact Plan tab showing a natural-language goal and generated action plan](docs/screenshots/interact-plan-tab.png)
+![Interact Plan tab showing a natural-language goal and generated action
+plan](docs/screenshots/interact-plan-tab.png)
 
-_Figure 3: Plan tab with use-case buttons for Login and Search and an LLM-generated action plan._
+*Figure 3: Interact Plan tab showing a natural-language goal and
+generated browser-action plan.*
 
-# 5-minute REST example
+# REST API
 
-The REST gateway is the preferred interface for conventional applications, Python services, LangGraph HTTP nodes, shell scripts, and integrations that already use HTTP APIs.
+Use REST for conventional applications, deterministic LangGraph nodes,
+shell scripts, and integrations that already use HTTP APIs.
 
-Set the gateway key once for shell examples:
+Set the base URL and key once:
 
-```bash
-export WRS_KEY='replace-with-your-GATEWAY_API_KEY'
+``` bash
 export WRS='http://127.0.0.1:8080'
+export WRS_KEY='replace-with-your-GATEWAY_API_KEY'
 ```
 
-All gateway requests use:
+Authenticated requests use:
 
-```http
+``` http
 Authorization: Bearer <GATEWAY_API_KEY>
 ```
 
-## REST endpoint summary
+Interactive OpenAPI documentation is available at:
 
-| Method | Endpoint | Purpose |
-|---|---|---|
-| `GET` | `/health` | Gateway health |
-| `POST` | `/v1/search` | Search through Firecrawl + SearXNG |
-| `POST` | `/v1/map` | Discover URLs on a site |
-| `POST` | `/v1/scrape` | Scrape a single URL |
-| `POST` | `/v1/crawl` | Start a crawl |
-| `GET` | `/v1/crawl/{job_id}` | Check crawl status/results |
-| `POST` | `/v1/extract` | Structured extraction through Ollama |
-| `POST` | `/v1/interact/sessions` | Create browser session |
-| `POST` | `/v1/interact/sessions/{id}/navigate` | Navigate browser |
-| `POST` | `/v1/interact/sessions/{id}/action` | Click/type/press/select/wait/scroll |
-| `GET` | `/v1/interact/sessions/{id}/text` | Read page text |
-| `GET` | `/v1/interact/sessions/{id}/screenshot` | Capture PNG screenshot |
-| `DELETE` | `/v1/interact/sessions/{id}` | Close browser session |
+``` text
+http://127.0.0.1:8080/docs
+```
+
+## Endpoint summary
+
+  -------------------------------------------------------------------------------------------------------
+  Method                  Endpoint                                  Purpose
+  ----------------------- ----------------------------------------- -------------------------------------
+  `GET`                   `/health`                                 Gateway/dependency health
+
+  `POST`                  `/v1/search`                              Search through Firecrawl + SearXNG
+
+  `POST`                  `/v1/map`                                 Discover URLs on a site
+
+  `POST`                  `/v1/scrape`                              Scrape a single URL
+
+  `POST`                  `/v1/crawl`                               Start a crawl
+
+  `GET`                   `/v1/crawl/{job_id}`                      Check crawl status/results
+
+  `POST`                  `/v1/extract`                             Structured extraction through Ollama
+
+  `POST`                  `/v1/interact/sessions`                   Create a browser session
+
+  `POST`                  `/v1/interact/sessions/{id}/navigate`     Navigate a browser session
+
+  `POST`                  `/v1/interact/sessions/{id}/action`       Click/type/press/select/wait/scroll
+
+  `GET`                   `/v1/interact/sessions/{id}/text`         Read page text
+
+  `GET`                   `/v1/interact/sessions/{id}/screenshot`   Capture a PNG screenshot
+
+  `DELETE`                `/v1/interact/sessions/{id}`              Close a browser session
+  -------------------------------------------------------------------------------------------------------
 
 ## Search
 
-```bash
+``` bash
 curl -sS "$WRS/v1/search" \
   -H "Authorization: Bearer $WRS_KEY" \
   -H 'Content-Type: application/json' \
@@ -327,13 +501,29 @@ curl -sS "$WRS/v1/search" \
 
 Flow:
 
-```text
-REST client -> Gateway -> Firecrawl /v2/search -> existing SearXNG
+``` text
+REST client -> Gateway -> Firecrawl -> existing SearXNG
 ```
 
-## Map a website
+Search and scrape result content in one request:
 
-```bash
+``` bash
+curl -sS "$WRS/v1/search" \
+  -H "Authorization: Bearer $WRS_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "query": "Royal Caribbean Alaska 2027",
+    "limit": 5,
+    "scrapeOptions": {
+      "formats": ["markdown"],
+      "onlyMainContent": true
+    }
+  }' | jq
+```
+
+## Map a site
+
+``` bash
 curl -sS "$WRS/v1/map" \
   -H "Authorization: Bearer $WRS_KEY" \
   -H 'Content-Type: application/json' \
@@ -343,21 +533,56 @@ curl -sS "$WRS/v1/map" \
   }' | jq
 ```
 
-## Scrape a page
+Target a topic:
 
-```bash
+``` bash
+curl -sS "$WRS/v1/map" \
+  -H "Authorization: Bearer $WRS_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "url": "https://www.royalcaribbean.com",
+    "search": "Alaska cruise",
+    "limit": 50
+  }' | jq
+```
+
+## Scrape
+
+``` bash
 curl -sS "$WRS/v1/scrape" \
   -H "Authorization: Bearer $WRS_KEY" \
   -H 'Content-Type: application/json' \
   -d '{
     "url": "https://example.com",
-    "formats": ["markdown"]
+    "formats": ["markdown"],
+    "onlyMainContent": true
   }' | jq
 ```
 
-## Start a crawl
+Multiple formats can be requested when supported by the pinned Firecrawl
+release:
 
-```bash
+``` bash
+curl -sS "$WRS/v1/scrape" \
+  -H "Authorization: Bearer $WRS_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "url": "https://example.com",
+    "formats": ["markdown", "links", "screenshot"],
+    "onlyMainContent": true,
+    "waitFor": 1000
+  }' | jq
+```
+
+Inspect target-page metadata as well as the gateway HTTP status; a
+successful gateway request does not necessarily mean the target site
+returned useful content.
+
+## Crawl
+
+Start:
+
+``` bash
 curl -sS "$WRS/v1/crawl" \
   -H "Authorization: Bearer $WRS_KEY" \
   -H 'Content-Type: application/json' \
@@ -367,32 +592,52 @@ curl -sS "$WRS/v1/crawl" \
   }' | jq
 ```
 
-Save the returned crawl job ID and poll it:
+Poll:
 
-```bash
+``` bash
 JOB_ID='<returned-job-id>'
 
 curl -sS "$WRS/v1/crawl/$JOB_ID" \
   -H "Authorization: Bearer $WRS_KEY" | jq
 ```
 
-## Extract structured data from a URL
+Limit crawl scope where appropriate:
 
-The gateway first scrapes the page through Firecrawl and then sends the resulting content to the dedicated Ollama extraction service.
+``` bash
+curl -sS "$WRS/v1/crawl" \
+  -H "Authorization: Bearer $WRS_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "url": "https://example.com",
+    "limit": 20,
+    "maxDepth": 2,
+    "scrapeOptions": {
+      "formats": ["markdown"],
+      "onlyMainContent": true
+    }
+  }' | jq
+```
 
-```mermaid
-flowchart TD
+## Structured extraction
+
+The gateway can scrape a URL and send the resulting content to the
+dedicated Ollama extraction service:
+
+``` mermaid
+flowchart LR
     A[URL] --> B[Firecrawl scrape]
-    B --> C[markdown]
+    B --> C[Content]
     C --> D[Extract service]
     D --> E[Ollama]
-    E --> F[JSON Schema validation + bounded retry]
-    F --> G[Structured JSON]
+    E --> F[JSON Schema validation]
+    F --> G{Valid?}
+    G -->|yes| H[Structured JSON + provenance]
+    G -->|no, retry available| E
 ```
 
 Example:
 
-```bash
+``` bash
 curl -sS "$WRS/v1/extract" \
   -H "Authorization: Bearer $WRS_KEY" \
   -H 'Content-Type: application/json' \
@@ -411,9 +656,9 @@ curl -sS "$WRS/v1/extract" \
   }' | jq
 ```
 
-Typical response shape:
+Typical response:
 
-```json
+``` json
 {
   "data": {
     "title": "Example Domain",
@@ -433,70 +678,34 @@ Typical response shape:
 
 ### Extract request fields
 
-| Field | Required | Description |
-|---|---|---|
-| `url` | one of `url` or `content` | Page to scrape through Firecrawl before extraction. |
-| `content` | one of `url` or `content` | Raw text or markdown to extract from directly, skipping the scrape step. |
-| `instruction` | yes | Plain-language description of what to extract. Be specific. |
-| `schema` | yes | JSON Schema describing the desired output shape. Use `additionalProperties: false` to keep the model focused. |
-| `model` | no | Override the Ollama model for this call only. Defaults to `OLLAMA_MODEL` from `.env`. |
-| `max_retries` | no | Maximum number of JSON Schema validation retries. Defaults to `EXTRACT_MAX_RETRIES` from `.env`. |
+  -----------------------------------------------------------------------
+  Field                   Required                Description
+  ----------------------- ----------------------- -----------------------
+  `url`                   one of `url` or         Page to scrape before
+                          `content`               extraction
 
-You can supply either `url` or `content`, but not both. The gateway checks for at least one.
+  `content`               one of `url` or         Raw text/markdown to
+                          `content`               extract directly
 
-### More extract examples
+  `instruction`           yes                     What to extract; be
+                                                  explicit
 
-**Extract from supplied content**
+  `schema`                yes                     JSON Schema for the
+                                                  required output
 
-```bash
-curl -sS "$WRS/v1/extract" \
-  -H "Authorization: Bearer $WRS_KEY" \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "content": "The Blue Bistro serves seafood on 123 Main St, Boston. Phone: 555-0100.",
-    "instruction": "Extract the restaurant name, cuisine, street address, and phone number.",
-    "schema": {
-      "type": "object",
-      "properties": {
-        "name": {"type": "string"},
-        "cuisine": {"type": "string"},
-        "address": {"type": "string"},
-        "phone": {"type": "string"}
-      },
-      "required": ["name", "cuisine", "address", "phone"],
-      "additionalProperties": false
-    }
-  }' | jq
-```
+  `model`                 no                      Override `OLLAMA_MODEL`
+                                                  for this request
 
-**Override the Ollama model for one call**
+  `max_retries`           no                      Override the configured
+                                                  validation retry count
+  -----------------------------------------------------------------------
 
-```bash
-curl -sS "$WRS/v1/extract" \
-  -H "Authorization: Bearer $WRS_KEY" \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "url": "https://example.com",
-    "instruction": "Extract the page title and a short summary.",
-    "model": "qwen2.5:14b",
-    "max_retries": 2,
-    "schema": {
-      "type": "object",
-      "properties": {
-        "title": {"type": ["string", "null"]},
-        "summary": {"type": ["string", "null"]}
-      },
-      "required": ["title", "summary"],
-      "additionalProperties": false
-    }
-  }' | jq
-```
+Use `additionalProperties: false` when you want tightly constrained
+output.
 
-## Extract from content you already have
+### Extract content you already have
 
-This avoids an unnecessary scrape:
-
-```bash
+``` bash
 curl -sS "$WRS/v1/extract" \
   -H "Authorization: Bearer $WRS_KEY" \
   -H 'Content-Type: application/json' \
@@ -515,11 +724,15 @@ curl -sS "$WRS/v1/extract" \
   }' | jq
 ```
 
+This avoids an unnecessary scrape.
+
 ## Browser interaction
+
+Browser automation is session based.
 
 ### Create a session
 
-```bash
+``` bash
 SESSION_ID=$(curl -sS "$WRS/v1/interact/sessions" \
   -X POST \
   -H "Authorization: Bearer $WRS_KEY" \
@@ -531,16 +744,18 @@ echo "$SESSION_ID"
 
 ### Navigate
 
-```bash
+``` bash
 curl -sS "$WRS/v1/interact/sessions/$SESSION_ID/navigate" \
   -H "Authorization: Bearer $WRS_KEY" \
   -H 'Content-Type: application/json' \
   -d '{"url":"https://example.com"}' | jq
 ```
 
-### Click with an explicit selector
+### Click
 
-```bash
+Prefer explicit selectors when you know them:
+
+``` bash
 curl -sS "$WRS/v1/interact/sessions/$SESSION_ID/action" \
   -H "Authorization: Bearer $WRS_KEY" \
   -H 'Content-Type: application/json' \
@@ -550,9 +765,25 @@ curl -sS "$WRS/v1/interact/sessions/$SESSION_ID/action" \
   }' | jq
 ```
 
-### Type into a field
+When a selector is not known, a natural-language description can be
+used:
 
-```bash
+``` bash
+curl -sS "$WRS/v1/interact/sessions/$SESSION_ID/action" \
+  -H "Authorization: Bearer $WRS_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "action": "click",
+    "description": "Search"
+  }' | jq
+```
+
+Interact tries deterministic accessible-text/label matching first.
+Ollama is used only when the target remains ambiguous.
+
+### Type
+
+``` bash
 curl -sS "$WRS/v1/interact/sessions/$SESSION_ID/action" \
   -H "Authorization: Bearer $WRS_KEY" \
   -H 'Content-Type: application/json' \
@@ -563,308 +794,74 @@ curl -sS "$WRS/v1/interact/sessions/$SESSION_ID/action" \
   }' | jq
 ```
 
-### Use a natural-language element description
-
-When no CSS selector is supplied, the service first tries deterministic accessible-text and label matching. Ollama is used only when the target remains ambiguous.
-
-```bash
-curl -sS "$WRS/v1/interact/sessions/$SESSION_ID/action" \
-  -H "Authorization: Bearer $WRS_KEY" \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "action": "click",
-    "description": "Search"
-  }' | jq
-```
-
 ### Read page text
 
-```bash
+``` bash
 curl -sS "$WRS/v1/interact/sessions/$SESSION_ID/text" \
   -H "Authorization: Bearer $WRS_KEY" | jq
 ```
 
-### Save a screenshot
+### Screenshot
 
-```bash
+``` bash
 curl -sS "$WRS/v1/interact/sessions/$SESSION_ID/screenshot" \
   -H "Authorization: Bearer $WRS_KEY" \
   -o screenshot.png
 ```
 
-### Close the session
+### Close
 
-```bash
+``` bash
 curl -sS "$WRS/v1/interact/sessions/$SESSION_ID" \
   -X DELETE \
   -H "Authorization: Bearer $WRS_KEY" | jq
 ```
 
-## Scenario recipes and best practices
+### Complete browser flow
 
-These recipes mirror the Firecrawl V1 recommendations through the gateway contract. Every example uses `Authorization: Bearer $WRS_KEY` and `Content-Type: application/json` for `POST` requests.
-
-### Search and read the top results
-
-Firecrawl returns search metadata by default. Ask for `scrapeOptions` with `markdown` to get full page content, and use `onlyMainContent: true` to skip navigation/footers.
-
-```bash
-curl -sS "$WRS/v1/search" \
-  -H "Authorization: Bearer $WRS_KEY" \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "query": "Royal Caribbean Alaska 2027",
-    "limit": 5,
-    "scrapeOptions": {
-      "formats": ["markdown"],
-      "onlyMainContent": true
-    }
-  }' | jq
-```
-
-### Search with a time filter
-
-Use `tbs` to limit results to a recent period (`qdr:w` = past week, `qdr:m` = past month).
-
-```bash
-curl -sS "$WRS/v1/search" \
-  -H "Authorization: Bearer $WRS_KEY" \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "query": "NVIDIA stock news",
-    "limit": 5,
-    "tbs": "qdr:d",
-    "scrapeOptions": {
-      "formats": ["markdown"],
-      "onlyMainContent": true
-    }
-  }' | jq
-```
-
-### Discover a site through its sitemap
-
-`map` is the fastest way to get URLs. `sitemapOnly: true` returns only sitemap links, while `search` lets you target a topic.
-
-```bash
-curl -sS "$WRS/v1/map" \
-  -H "Authorization: Bearer $WRS_KEY" \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "url": "https://www.princess.com",
-    "limit": 100,
-    "sitemapOnly": true,
-    "includeSubdomains": false
-  }' | jq
-```
-
-### Map a site for a topic
-
-```bash
-curl -sS "$WRS/v1/map" \
-  -H "Authorization: Bearer $WRS_KEY" \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "url": "https://www.royalcaribbean.com",
-    "search": "Alaska cruise",
-    "limit": 50,
-    "ignoreSitemap": false
-  }' | jq
-```
-
-### Scrape a page with multiple formats
-
-Request `markdown`, `links`, and `screenshot` at the same time. Always inspect `data.metadata.statusCode`; a gateway `200` does not guarantee the target page loaded cleanly.
-
-```bash
-curl -sS "$WRS/v1/scrape" \
-  -H "Authorization: Bearer $WRS_KEY" \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "url": "https://www.princess.com",
-    "formats": ["markdown", "links", "screenshot"],
-    "onlyMainContent": true,
-    "waitFor": 1000
-  }' | jq '.data | {statusCode: .metadata.statusCode, markdown: .markdown[:200], links: .links[:5], screenshot: .screenshot}'
-```
-
-### Scrape a product page
-
-Use the `product` format for deterministic product extraction on product pages.
-
-```bash
-curl -sS "$WRS/v1/scrape" \
-  -H "Authorization: Bearer $WRS_KEY" \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "url": "https://example.com/product",
-    "formats": ["product", "markdown"],
-    "onlyMainContent": true
-  }' | jq '.data.product'
-```
-
-### Scrape with custom headers
-
-Send headers such as `Accept-Language` or a custom user-agent.
-
-```bash
-curl -sS "$WRS/v1/scrape" \
-  -H "Authorization: Bearer $WRS_KEY" \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "url": "https://example.com",
-    "formats": ["markdown"],
-    "headers": {
-      "Accept-Language": "fr-CA,fr;q=0.9",
-      "User-Agent": "Mozilla/5.0 (compatible; ResearchBot/1.0)"
-    }
-  }' | jq
-```
-
-### Crawl a site with controlled depth and paths
-
-Limit scope with `maxDepth`, `includePaths`, and `excludePaths`. Use `scrapeOptions` to keep the returned data small.
-
-```bash
-curl -sS "$WRS/v1/crawl" \
-  -H "Authorization: Bearer $WRS_KEY" \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "url": "https://www.princess.com",
-    "limit": 20,
-    "maxDepth": 2,
-    "includePaths": ["cruise.*"],
-    "excludePaths": [".*/blog/.*"],
-    "scrapeOptions": {
-      "formats": ["markdown"],
-      "onlyMainContent": true
-    }
-  }' | jq
-```
-
-### Crawl an entire domain
-
-Set `crawlEntireDomain: true` to follow sibling and parent links, not just child paths.
-
-```bash
-curl -sS "$WRS/v1/crawl" \
-  -H "Authorization: Bearer $WRS_KEY" \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "url": "https://example.com",
-    "limit": 100,
-    "crawlEntireDomain": true,
-    "scrapeOptions": {
-      "formats": ["markdown"],
-      "onlyMainContent": true
-    }
-  }' | jq
-```
-
-### Crawl with a webhook
-
-Receive `crawl.started`, `crawl.page`, `crawl.completed`, and `crawl.failed` events at your endpoint as the crawl progresses.
-
-```bash
-curl -sS "$WRS/v1/crawl" \
-  -H "Authorization: Bearer $WRS_KEY" \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "url": "https://example.com",
-    "limit": 50,
-    "webhook": "https://your-app.example.com/webhooks/firecrawl",
-    "scrapeOptions": {
-      "formats": ["markdown"],
-      "onlyMainContent": true
-    }
-  }' | jq
-```
-
-### Extract structured data from a URL
-
-```bash
-curl -sS "$WRS/v1/extract" \
-  -H "Authorization: Bearer $WRS_KEY" \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "url": "https://www.princess.com",
-    "instruction": "Extract the cruise line name, featured destinations, and a one-sentence tagline.",
-    "max_retries": 2,
-    "schema": {
-      "type": "object",
-      "properties": {
-        "cruise_line": {"type": ["string", "null"]},
-        "destinations": {"type": "array", "items": {"type": "string"}},
-        "tagline": {"type": ["string", "null"]}
-      },
-      "required": ["cruise_line", "destinations", "tagline"],
-      "additionalProperties": false
-    }
-  }' | jq
-```
-
-### Extract from already-scraped content
-
-Skip the scrape by passing `content` directly.
-
-```bash
-curl -sS "$WRS/v1/extract" \
-  -H "Authorization: Bearer $WRS_KEY" \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "content": "The Blue Bistro serves seafood on 123 Main St, Boston. Phone: 555-0100.",
-    "instruction": "Extract the restaurant name, cuisine, street address, and phone number.",
-    "schema": {
-      "type": "object",
-      "properties": {
-        "name": {"type": "string"},
-        "cuisine": {"type": "string"},
-        "address": {"type": "string"},
-        "phone": {"type": "string"}
-      },
-      "required": ["name", "cuisine", "address", "phone"],
-      "additionalProperties": false
-    }
-  }' | jq
-```
-
-### Browser automation flow
-
-Create, navigate, act, and close. Use explicit selectors or accessible text descriptions.
-
-```bash
-## Step 1: createSESSION_ID=$(curl -sS "$WRS/v1/interact/sessions" \
+``` bash
+# 1. Create a session.
+SESSION_ID=$(curl -sS "$WRS/v1/interact/sessions" \
   -X POST \
   -H "Authorization: Bearer $WRS_KEY" \
   -H 'Content-Type: application/json' \
   -d '{}' | jq -r '.session_id')
 
-## Step 2: navigatecurl -sS "$WRS/v1/interact/sessions/$SESSION_ID/navigate" \
+# 2. Navigate.
+curl -sS "$WRS/v1/interact/sessions/$SESSION_ID/navigate" \
   -H "Authorization: Bearer $WRS_KEY" \
   -H 'Content-Type: application/json' \
-  -d '{"url": "https://www.princess.com", "wait_until": "networkidle"}' | jq
+  -d '{"url":"https://example.com","wait_until":"networkidle"}' | jq
 
-## Step 3: click a search linkcurl -sS "$WRS/v1/interact/sessions/$SESSION_ID/action" \
-  -H "Authorization: Bearer $WRS_KEY" \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "action": "click",
-    "selector": "text=Search"
-  }' | jq
+# 3. Read the page.
+curl -sS "$WRS/v1/interact/sessions/$SESSION_ID/text" \
+  -H "Authorization: Bearer $WRS_KEY" | jq
 
-## Step 4: screenshotcurl -sS "$WRS/v1/interact/sessions/$SESSION_ID/screenshot" \
+# 4. Capture a screenshot.
+curl -sS "$WRS/v1/interact/sessions/$SESSION_ID/screenshot" \
   -H "Authorization: Bearer $WRS_KEY" \
   -o screenshot.png
 
-## Step 5: closecurl -sS "$WRS/v1/interact/sessions/$SESSION_ID" \
+# 5. Close the session.
+curl -sS "$WRS/v1/interact/sessions/$SESSION_ID" \
   -X DELETE \
   -H "Authorization: Bearer $WRS_KEY" | jq
 ```
 
-### Consequential actions
+### Consequential clicks
 
-The interact service blocks clicks that look consequential unless you explicitly set `allow_consequential: true`. An agent should only set this after user approval.
+The Interact service applies a conservative policy to **clicks** whose
+target text appears consequential. A protected click requires:
 
-```bash
+``` json
+{
+  "allow_consequential": true
+}
+```
+
+Example:
+
+``` bash
 curl -sS "$WRS/v1/interact/sessions/$SESSION_ID/action" \
   -H "Authorization: Bearer $WRS_KEY" \
   -H 'Content-Type: application/json' \
@@ -875,71 +872,55 @@ curl -sS "$WRS/v1/interact/sessions/$SESSION_ID/action" \
   }' | jq
 ```
 
-### General best-practice notes
+This is a guardrail for clicks, **not a complete authorization system
+for every possible browser side effect**. Applications and agents remain
+responsible for obtaining explicit user authorization before
+consequential actions.
 
-- `onlyMainContent: true` is the default in Firecrawl V1, so you usually get clean content without specifying it.
-- For `scrape` and `crawl` responses, check `data.metadata.statusCode` after confirming `success: true`; HTTP `200` from the gateway means the call reached Firecrawl, but the target page may have returned an error.
-- Combine `formats` arrays to fetch multiple outputs (e.g., `markdown` + `links` + `screenshot`) in one call.
-- Use `map` to discover URLs before an expensive `crawl`.
-- Use `extract` when you need a guaranteed JSON shape; use `scrape` with `json` or `product` formats for ad-hoc structured output.
-- Keep `interact` sessions short-lived and always `DELETE` them when finished.
+# MCP
 
-# 5-minute MCP example
+The MCP server exposes Web Research capabilities to MCP-capable clients
+over **Streamable HTTP**.
 
-The MCP server is an alternate interface over the **same REST gateway**. It does not maintain a second implementation of search, scrape, crawl, extract, or browser interaction.
+Endpoint:
 
-```mermaid
-%%{init: {'theme': 'default', 'flowchart': {'useMaxWidth': true}}}%%
-flowchart TD
-    A[MCP client] --> B[http://127.0.0.1:8081/mcp]
-    B --> C[FastMCP server]
-    C --> D[REST gateway]
-    D --> E[Firecrawl]
-    D --> F[Extract]
-    D --> G[Interact]
-    E --> H[(SearXNG)]
-    F --> I[(Ollama)]
-    G --> J[(Playwright)]
-    G -.-> K[(Ollama optional)]
-```
-
-The MCP endpoint uses **Streamable HTTP**:
-
-```text
+``` text
 http://127.0.0.1:8081/mcp
 ```
 
-Because the Compose file binds MCP to `127.0.0.1`, it is accessible only from the Docker host by default. This is intentional. If you expose MCP to another machine, put it behind TLS and authentication rather than simply changing the bind address.
+The MCP server delegates to the same REST gateway used by conventional
+clients. It does not maintain a separate implementation of search,
+scrape, extraction, or browser logic.
 
 ## MCP tools
 
-| Tool | Purpose |
-|---|---|
-| `about` | Describe the stack |
-| `search` | Search through Firecrawl + SearXNG |
-| `map_site` | Discover URLs on a site |
-| `scrape` | Scrape a URL |
-| `crawl` | Start a crawl |
-| `crawl_status` | Poll crawl status/results |
-| `extract` | Scrape + structured extraction through Ollama |
-| `browser_create_session` | Create isolated browser session |
-| `browser_navigate` | Navigate a browser session |
-| `browser_action` | Click/type/press/select/wait/scroll |
-| `browser_text` | Read page text |
-| `browser_screenshot` | Return a PNG as base64 |
-| `browser_close_session` | Destroy browser session |
+  Tool                       Purpose
+  -------------------------- --------------------------------------
+  `about`                    Describe the stack
+  `search`                   Search through Firecrawl + SearXNG
+  `map_site`                 Discover URLs on a site
+  `scrape`                   Scrape a URL
+  `crawl`                    Start a crawl
+  `crawl_status`             Poll crawl status/results
+  `extract`                  Structured extraction through Ollama
+  `browser_create_session`   Create an isolated browser session
+  `browser_navigate`         Navigate a browser session
+  `browser_action`           Click/type/press/select/wait/scroll
+  `browser_text`             Read page text
+  `browser_screenshot`       Return a screenshot
+  `browser_close_session`    Destroy a browser session
 
-## Use MCP from a FastMCP Python client
+## FastMCP Python client
 
-Install the client library in your calling environment:
+Install:
 
-```bash
+``` bash
 pip install fastmcp
 ```
 
 Example:
 
-```python
+``` python
 import asyncio
 from fastmcp import Client
 
@@ -962,57 +943,59 @@ async def main():
 asyncio.run(main())
 ```
 
-## MCP search example
+## MCP examples
 
-Call tool:
+### Search
 
-```text
+Tool:
+
+``` text
 search
 ```
 
 Arguments:
 
-```json
+``` json
 {
   "query": "Royal Caribbean Alaska 2027",
   "limit": 10
 }
 ```
 
-This executes the same backend path as:
+This reaches the same backend path as:
 
-```text
+``` text
 POST /v1/search
 ```
 
-## MCP scrape example
+### Scrape
 
 Tool:
 
-```text
+``` text
 scrape
 ```
 
 Arguments:
 
-```json
+``` json
 {
   "url": "https://example.com",
   "formats": ["markdown"]
 }
 ```
 
-## MCP extract example
+### Extract
 
 Tool:
 
-```text
+``` text
 extract
 ```
 
 Arguments:
 
-```json
+``` json
 {
   "url": "https://example.com",
   "instruction": "Extract the page title and summary.",
@@ -1028,40 +1011,34 @@ Arguments:
 }
 ```
 
-## MCP browser example
+### Browser
 
-Browser interaction is session based.
+Create:
 
-First call:
-
-```text
+``` text
 browser_create_session
 ```
 
-Save the returned `session_id`.
+Save the returned `session_id`, then navigate:
 
-Then call:
-
-```text
+``` text
 browser_navigate
 ```
 
-with:
-
-```json
+``` json
 {
   "session_id": "<session-id>",
   "url": "https://example.com"
 }
 ```
 
-Then an action:
+Act:
 
-```text
+``` text
 browser_action
 ```
 
-```json
+``` json
 {
   "session_id": "<session-id>",
   "action": "click",
@@ -1069,25 +1046,25 @@ browser_action
 }
 ```
 
-Read page text:
+Read:
 
-```text
+``` text
 browser_text
 ```
 
-```json
+``` json
 {
   "session_id": "<session-id>"
 }
 ```
 
-Finally:
+Close:
 
-```text
+``` text
 browser_close_session
 ```
 
-```json
+``` json
 {
   "session_id": "<session-id>"
 }
@@ -1095,95 +1072,45 @@ browser_close_session
 
 ## Generic MCP client configuration
 
-For MCP clients that accept a Streamable HTTP URL, configure the server URL as:
+For clients that accept a Streamable HTTP server URL:
 
-```text
+``` text
 http://127.0.0.1:8081/mcp
 ```
 
-The exact client configuration syntax varies by application. The key point is that the client connects directly to that URL; it does **not** connect to Firecrawl itself.
-
-# Security model
-
-## Gateway API key
-
-`GATEWAY_API_KEY` protects the REST gateway when set.
-
-Generate one with:
-
-```bash
-openssl rand -hex 32
-```
-
-Do not commit `.env`.
-
-## Network exposure
-
-By default only these ports are published, both on loopback:
-
-```text
-127.0.0.1:8080 -> REST gateway
-127.0.0.1:8081 -> MCP server
-```
-
-The following remain private to the Compose network:
-
-- Firecrawl API
-- Firecrawl Playwright service
-- Extract service
-- Interact service
-- Redis
-- RabbitMQ
-- PostgreSQL
-
-## SSRF protection
-
-The interaction service validates top-level navigation and browser subrequests. Private, loopback, link-local, multicast, and other non-public destinations are rejected unless explicitly permitted by code/policy.
-
-This matters because a browser automation service without SSRF controls can otherwise be used to probe internal services.
-
-## Consequential actions
-
-The interaction service applies a conservative text-based policy to clicks that appear consequential. A potentially consequential click returns an error unless the request explicitly sets:
-
-```json
-{
-  "allow_consequential": true
-}
-```
-
-An agent should set this only after the application has obtained explicit user approval for that action.
+The exact configuration syntax depends on the MCP client.
 
 # Choosing REST vs MCP
 
 Use **REST** when:
 
-- calling from application code
-- using deterministic LangGraph nodes
-- integrating through FastAPI/httpx/curl
-- you want explicit HTTP request/response control
-- you want OpenAPI documentation
+-   calling from application code
+-   building deterministic LangGraph nodes
+-   integrating with `httpx`, `curl`, FastAPI, or another HTTP client
+-   you want explicit request/response control
+-   you want OpenAPI documentation
 
 Use **MCP** when:
 
-- an LLM or agent should discover tools dynamically
-- using an MCP-capable client
-- you want the model to choose among `search`, `scrape`, `extract`, and browser tools
-- you want one tool server rather than hard-coded HTTP nodes
+-   an LLM or agent should discover tools dynamically
+-   the calling application already supports MCP
+-   you want the model to choose among search, scrape, extract, and
+    browser tools
+-   you want a single tool server rather than hard-coded HTTP nodes
 
-Both interfaces reach the same underlying services.
+Both interfaces reach the same underlying Web Research services.
 
 # LangGraph integration
 
 For deterministic LangGraph nodes, point all web-research HTTP calls at:
 
-```text
+``` text
 http://<docker-host>:8080
 ```
 
-Do not let individual nodes depend directly on Firecrawl's URL. For example:
+For example:
 
-```text
+``` text
 search node   -> POST /v1/search
 map node      -> POST /v1/map
 scrape node   -> POST /v1/scrape
@@ -1192,40 +1119,197 @@ extract node  -> POST /v1/extract
 interact node -> /v1/interact/...
 ```
 
-For an MCP-driven agent, connect the MCP client to:
+Do not let individual nodes depend directly on Firecrawl, Ollama, or
+Playwright URLs.
 
-```text
+For an MCP-driven agent:
+
+``` text
 http://<docker-host>:8081/mcp
 ```
 
-This separation lets you replace a backend later without rewriting the graph.
+This boundary lets backend implementations change without rewriting the
+graph.
+
+# Security
+
+## Security at a glance
+
+Web Research is designed for self-hosting and applies defense in depth:
+
+  -----------------------------------------------------------------------
+  Control                             Purpose
+  ----------------------------------- -----------------------------------
+  Loopback-only published interfaces  Avoid accidental network exposure
+  by default                          
+
+  Gateway bearer authentication       Protect REST operations when
+                                      configured
+
+  Internal-only dependency services   Keep databases, queues, workers,
+                                      and browser backends off host ports
+
+  Isolated Playwright contexts        Separate browser sessions
+
+  Browser-session TTL/concurrency     Bound resource use
+  controls                            
+
+  SSRF destination validation         Reject private/internal browser
+                                      destinations
+
+  Context-level browser request       Apply network policy across the
+  interception                        browser context
+
+  Service-worker restrictions         Reduce request paths that can
+                                      bypass interception
+
+  WebSocket restrictions              Reduce unguarded browser network
+                                      channels
+
+  Consequential-click guard           Require explicit opt-in for
+                                      protected click targets
+
+  Read-only filesystems/capability    Reduce container privilege
+  dropping where configured           
+
+  Immutable third-party image digests Improve reproducibility and
+                                      supply-chain control
+
+  Security regression tests           Verify key controls remain enforced
+  -----------------------------------------------------------------------
+
+These controls reduce risk; they do not make arbitrary browser
+automation safe to expose directly to the public Internet.
+
+## Authentication
+
+Configure a strong `GATEWAY_API_KEY`:
+
+``` bash
+openssl rand -hex 32
+```
+
+Store it in `.env`:
+
+``` dotenv
+GATEWAY_API_KEY=<generated-value>
+```
+
+Do not commit `.env`.
+
+If the application currently permits `GATEWAY_API_KEY` to be blank,
+treat that as **trusted-host/development-only behavior**. Before
+exposing REST or MCP beyond localhost, authentication should be
+mandatory at the gateway and/or a trusted reverse-proxy boundary.
+
+## Network exposure
+
+By default:
+
+``` text
+127.0.0.1:8080 -> REST gateway / Web UI
+127.0.0.1:8081 -> MCP server
+```
+
+The following remain private to the Compose network:
+
+-   Firecrawl API/workers
+-   Firecrawl Playwright
+-   Extract
+-   Interact
+-   Redis
+-   RabbitMQ
+-   PostgreSQL
+
+Do not publish those services merely for convenience.
+
+## SSRF protection
+
+Browser automation is a high-risk network boundary because a browser can
+otherwise be used to probe internal infrastructure.
+
+Interact therefore validates navigation and browser network destinations
+and rejects non-public destinations by default, including categories
+such as:
+
+-   loopback
+-   RFC1918/private networks
+-   link-local addresses
+-   cloud metadata-style destinations
+-   multicast/reserved/unspecified destinations
+-   disallowed URL schemes
+-   URLs containing embedded credentials
+
+Browser request interception is applied at the browser-context level so
+the policy covers the session rather than only one page. Service workers
+and WebSocket behavior are restricted so they cannot trivially bypass
+the ordinary request guard.
+
+Keep these controls enabled.
+
+## Consequential actions
+
+The built-in policy specifically protects **potentially consequential
+clicks** based on the target text and requires explicit opt-in through
+`allow_consequential`.
+
+It is intentionally a guardrail, not a universal authorization
+mechanism. Other browser operations can also have side effects. Agents
+should not perform purchases, bookings, submissions, deletions,
+messages, transfers, publication, or other consequential actions without
+explicit application-level/user authorization.
+
+## Secrets
+
+-   Never commit `.env`.
+-   Use a long random gateway key.
+-   Do not embed the gateway key into static UI HTML.
+-   Do not put credentials in browser-navigation URLs.
+-   Prefer a secret manager when deploying beyond a single trusted host.
+-   Rotate credentials if they are exposed in logs, shell history,
+    screenshots, or source control.
+
+## Reverse proxies and tunnels
+
+If REST or MCP is exposed beyond localhost:
+
+1.  require authentication
+2.  terminate TLS
+3.  preserve the real client identity only from trusted proxy hops
+4.  set request-body limits
+5.  add rate/concurrency controls
+6.  keep all backend services private
+7.  restrict source networks where practical
+8.  do not expose the browser backend directly
 
 # Testing
 
-The project includes both **unit/regression tests** and **live end-to-end test scripts**. The live tests exercise the actual running REST gateway, Firecrawl, external SearXNG, external Ollama, Playwright interaction service, and MCP server.
+The repository includes unit/regression tests and live end-to-end
+scripts.
 
 ## Test prerequisites
 
-Start the stack first:
+Start the stack:
 
-```bash
+``` bash
 docker compose up -d --build
 ```
 
-The live shell tests require `curl`, `python3`, and Docker. They automatically read `GATEWAY_API_KEY` from `.env` when it is not already exported.
+The shell tests require `curl`, `python3`, and Docker. They read
+`GATEWAY_API_KEY` from `.env` when it is not already exported.
 
-By default the end-to-end tests use:
+Defaults:
 
-```text
-REST gateway:  http://127.0.0.1:8080
-MCP endpoint:  http://127.0.0.1:8081/mcp
+``` text
+REST gateway:   http://127.0.0.1:8080
+MCP endpoint:   http://127.0.0.1:8081/mcp
 Public test URL: https://example.com
-Search query:   example domain
+Search query:    example domain
 ```
 
-Override them when needed:
+Override:
 
-```bash
+``` bash
 GATEWAY_URL=http://127.0.0.1:8080 \
 MCP_URL=http://127.0.0.1:8081/mcp \
 TEST_URL=https://www.iana.org \
@@ -1235,179 +1319,179 @@ SEARCH_QUERY='IANA reserved domains' \
 
 ## Unit and regression tests
 
-Run the Python tests in the project image:
-
-```bash
+``` bash
 make test-unit
 ```
 
-This checks:
+or:
 
-- loopback/private/link-local SSRF blocking
-- rejection of non-HTTP URL schemes
-- rejection of credentials embedded in URLs
-- mixed public/private DNS resolution, which protects against DNS-rebinding-style destinations
-- browser host allowlist enforcement
-- consequential-action detection
-- gateway API-key enforcement
-- `x-request-id` generation and preservation
-
-You can also use the shorter alias:
-
-```bash
+``` bash
 make test
 ```
 
+The regression suite covers controls such as:
+
+-   private/loopback/link-local SSRF blocking
+-   rejection of non-HTTP URL schemes
+-   rejection of credentials embedded in URLs
+-   mixed public/private DNS resolution
+-   browser host allowlist behavior
+-   consequential-click detection
+-   gateway API-key enforcement
+-   request-ID generation/preservation
+
 ## Live security tests
 
-```bash
+``` bash
 make test-security
 ```
 
 or:
 
-```bash
+``` bash
 ./scripts/test-security.sh
 ```
 
-The live security test creates a real isolated Playwright session and verifies that these destinations are rejected through the public REST contract:
+These tests exercise the deployed REST contract and verify rejection of
+representative unsafe destinations, including
+localhost/private-network/metadata-style targets and unsafe URL forms.
 
-```text
-127.0.0.1
-10.0.0.0/8
-192.168.0.0/16
-169.254.169.254
-file:// URLs
-credential-bearing URLs
-```
+Keep security tests as regression tests: if a dependency upgrade causes
+one to fail, investigate before deploying the upgrade.
 
-It also confirms that a bad gateway API key receives HTTP `401` when authentication is enabled, and that unknown browser-session IDs receive `404`. It then runs the unit security regression suite inside the gateway image.
+## Live REST functionality
 
-## Live REST functionality tests
-
-```bash
+``` bash
 make test-functionality
 ```
 
 or:
 
-```bash
+``` bash
 ./scripts/test-functionality.sh
 ```
 
-This performs actual end-to-end calls for:
+The live suite exercises:
 
-| Test | Path exercised |
-|---|---|
-| Health | client -> REST gateway |
-| Request ID | gateway middleware |
-| Search | gateway -> Firecrawl -> external SearXNG |
-| Map | gateway -> Firecrawl |
-| Scrape | gateway -> Firecrawl -> Firecrawl Playwright |
-| Crawl | gateway -> Firecrawl queue/workers |
-| Extract | gateway -> Extract -> external Ollama -> JSON Schema validation |
-| Browser create | gateway -> Interact -> Playwright |
-| Browser navigate | Interact + SSRF guard -> public URL |
-| Browser text | Playwright DOM extraction |
-| Screenshot | Playwright PNG generation |
-| Browser close | session cleanup |
+  Test               Path
+  ------------------ -----------------------------------------------------------
+  Health             client -\> gateway
+  Request ID         gateway middleware
+  Search             gateway -\> Firecrawl -\> SearXNG
+  Map                gateway -\> Firecrawl
+  Scrape             gateway -\> Firecrawl -\> Firecrawl Playwright
+  Crawl              gateway -\> Firecrawl queue/workers
+  Extract            gateway -\> Extract -\> Ollama -\> JSON Schema validation
+  Browser create     gateway -\> Interact -\> Playwright
+  Browser navigate   Interact + SSRF guard -\> public URL
+  Browser text       Playwright DOM extraction
+  Screenshot         Playwright PNG generation
+  Browser close      session cleanup
 
-The extraction test supplies content directly instead of scraping it first. This deliberately isolates the **Ollama extraction path** so a Firecrawl failure cannot hide an Ollama problem.
+The extraction test supplies content directly so the Ollama extraction
+path is tested independently of scraping.
 
-If you only want local/non-network functionality checks, skip the Firecrawl tests that require outbound Internet and SearXNG:
+Skip Internet/SearXNG-dependent checks when appropriate:
 
-```bash
+``` bash
 SKIP_NETWORK_TESTS=1 ./scripts/test-functionality.sh
 ```
 
 ## MCP smoke test
 
-```bash
+``` bash
 make test-mcp
 ```
 
 or:
 
-```bash
+``` bash
 ./scripts/test-mcp.sh
 ```
 
-The script executes a FastMCP client from inside the running MCP container. It connects to the real Streamable HTTP endpoint, performs MCP initialization, lists tools, verifies that all expected tools are exposed, and calls the `about` tool.
+The smoke test connects to the actual Streamable HTTP MCP endpoint,
+initializes a client session, lists tools, verifies expected tools, and
+calls `about`.
 
-```mermaid
-%%{init: {'theme': 'default', 'flowchart': {'useMaxWidth': true}}}%%
-flowchart LR
-    A[Discovery] --> B[about]
-    A --> C[search]
-    A --> D[map_site]
-    E[Content] --> F[scrape]
-    E --> G[crawl]
-    E --> H[crawl_status]
-    E --> I[extract]
-    J[Browser] --> K[create_session]
-    J --> L[navigate]
-    J --> M[action]
-    J --> N[text]
-    J --> O[screenshot]
-    J --> P[close_session]
-```
+## Wider endpoint regression
 
-## Live endpoint regression
-
-A wider endpoint regression suite with multiple checks per endpoint is also available:
-
-```bash
+``` bash
 ./scripts/test-endpoints.sh
 ```
 
-To skip tests that require a working SearXNG endpoint:
+Without network-dependent tests:
 
-```bash
+``` bash
 SKIP_NETWORK_TESTS=1 ./scripts/test-endpoints.sh
 ```
 
 ## Run everything
 
-```bash
+``` bash
 make test-all
 ```
 
 or:
 
-```bash
+``` bash
 ./scripts/test-all.sh
 ```
 
 A successful run ends with:
 
-```text
+``` text
 ALL TESTS PASSED
 ```
 
-These tests are intentionally kept separate: unit tests are fast and deterministic, while live tests prove that the deployed services and your existing Ollama/SearXNG endpoints actually work together.
+Use the complete suite before accepting upgrades to Firecrawl,
+Playwright, Python dependencies, or other infrastructure components.
+
+## CI expectations
+
+At minimum, CI should verify:
+
+``` text
+unit/regression tests
+static Python linting
+format consistency
+docker compose config
+Docker image builds
+```
+
+Recommended additional checks include ShellCheck for shell scripts and
+dependency/container vulnerability scanning.
 
 # Operations and troubleshooting
 
-## Gateway
+## Gateway health
 
-```bash
+``` bash
 curl -sS http://127.0.0.1:8080/health | jq
 ```
 
-If you enabled `GATEWAY_API_KEY` and your middleware requires it for health in a future version, add the Authorization header.
+If health becomes authenticated in a future configuration, add:
 
-## Verify Ollama from the extract container
+``` bash
+-H "Authorization: Bearer $WRS_KEY"
+```
 
-```bash
+## Verify Ollama from Extract
+
+``` bash
 docker compose exec extract python - <<'PY'
 import urllib.request
-print(urllib.request.urlopen('http://host.docker.internal:11434/api/tags', timeout=5).read()[:500])
+print(
+    urllib.request.urlopen(
+        "http://host.docker.internal:11434/api/tags",
+        timeout=5,
+    ).read()[:500]
+)
 PY
 ```
 
 ## Verify SearXNG from Firecrawl
 
-```bash
+``` bash
 docker compose exec firecrawl-api node -e \
   "fetch('http://host.docker.internal:8088/search?q=test&format=json').then(r=>{console.log(r.status);return r.text()}).then(t=>console.log(t.slice(0,500))).catch(e=>{console.error(e);process.exit(1)})"
 ```
@@ -1416,81 +1500,146 @@ docker compose exec firecrawl-api node -e \
 
 Check SearXNG directly:
 
-```bash
-curl -sS 'http://127.0.0.1:8088/search?q=test&format=json' | jq '.results | length'
+``` bash
+curl -sS 'http://127.0.0.1:8088/search?q=test&format=json' \
+  | jq '.results | length'
 ```
 
-Then inspect Firecrawl logs:
+Inspect Firecrawl:
 
-```bash
+``` bash
 docker compose logs --tail=200 firecrawl-api
 ```
 
-Confirm:
+Confirm configuration:
 
-```bash
+``` bash
 docker compose exec firecrawl-api env | grep '^SEARXNG_'
 ```
 
 ## Extraction fails
 
-Confirm Ollama sees the model:
+Confirm Ollama sees the configured model:
 
-```bash
-curl -sS http://127.0.0.1:11434/api/tags | jq -r '.models[].name'
+``` bash
+curl -sS http://127.0.0.1:11434/api/tags \
+  | jq -r '.models[].name'
 ```
 
-Then:
+Inspect Extract logs:
 
-```bash
+``` bash
 docker compose logs --tail=200 extract
 ```
 
 ## Browser fails to start
 
-```bash
+``` bash
 docker compose logs --tail=200 interact
 ```
 
-The interact container uses a Playwright image/runtime and a `1gb` shared-memory allocation.
+Check available RAM/shared memory and confirm the pinned Playwright
+image is available.
+
+## MCP fails to connect
+
+Check:
+
+``` bash
+docker compose ps
+docker compose logs --tail=200 mcp
+```
+
+Then verify the endpoint from the Docker host:
+
+``` text
+http://127.0.0.1:8081/mcp
+```
+
+Remember that MCP Streamable HTTP is not tested by simply browsing to
+the endpoint as though it were a normal HTML page; use an MCP client or
+the supplied smoke test.
 
 ## Request correlation
 
-The gateway creates/preserves an `x-request-id` and forwards it to downstream services. Use that identifier when correlating gateway, extract, and interact logs.
+The gateway creates or preserves `x-request-id` and forwards it to
+downstream services. Use the request ID to correlate gateway, Extract,
+and Interact logs.
 
 # Production recommendations
 
-Before exposing the stack outside a trusted host/network:
+Before exposing Web Research outside a trusted host:
 
-1. Pin Firecrawl and base image versions.
-2. Put REST and MCP behind a TLS reverse proxy.
-3. Add strong authentication at the reverse proxy/MCP boundary.
-4. Keep Redis, RabbitMQ, PostgreSQL, Playwright, Extract, and Firecrawl internal.
-5. Add resource limits appropriate to your hardware.
-6. Back up persistent Firecrawl state.
-7. Add log aggregation and metrics.
-8. Define browser-session concurrency based on RAM/CPU capacity.
-9. Keep the Interact service's SSRF restrictions enabled.
-10. Do not allow an agent to set `allow_consequential=true` without explicit authorization.
-11. Test upgrades in a staging Compose project before changing production.
-12. Keep Ollama and SearXNG independently managed so this stack can be upgraded without replacing them.
+1.  **Require authentication.** Do not rely on an accidentally blank
+    `GATEWAY_API_KEY`.
+2.  **Keep REST/MCP behind TLS and a trusted access boundary.** A
+    reverse proxy, VPN, or zero-trust access layer is preferable to
+    direct Internet exposure.
+3.  **Keep backend services private.** Do not publish Redis, RabbitMQ,
+    PostgreSQL, Firecrawl internals, Extract, Interact, or Playwright.
+4.  **Keep SSRF protections enabled.** Treat failures in SSRF regression
+    tests as release blockers.
+5.  **Set ingress request-body limits.** Protect the gateway from
+    unexpectedly large requests before the application parses them.
+6.  **Add rate and concurrency controls.** Crawls, LLM inference,
+    screenshots, and browser sessions are resource-intensive.
+7.  **Set container resource limits appropriate to the host.** Pay
+    particular attention to Firecrawl workers, Playwright, and Ollama.
+8.  **Use strong secrets and rotate them when needed.**
+9.  **Pin tested images and dependencies.** Avoid floating `latest` tags
+    in production.
+10. **Test upgrades before deployment.** Run `make test-all` against the
+    candidate version.
+11. **Back up persistent Firecrawl state** if the deployment depends on
+    queued/history data.
+12. **Aggregate logs and metrics.** Preserve request IDs for
+    correlation.
+13. **Monitor disk, memory, queue depth, browser-session count, and
+    Ollama load.**
+14. **Define browser-session concurrency based on actual RAM/CPU
+    capacity.**
+15. **Require explicit authorization for consequential actions.**
+    `allow_consequential=true` should never be set automatically by an
+    agent without the application's authorization policy.
+16. **Keep Ollama and SearXNG independently managed** so Web Research
+    can be upgraded without replacing them.
+17. **Stage security-sensitive changes.** Browser/network-policy changes
+    deserve live regression testing before production rollout.
 
 # Capability summary
 
-Once running, you have a single self-hosted web-research layer with both REST and MCP access:
+Once running, Web Research provides a single self-hosted capability
+layer:
 
-```mermaid
+``` mermaid
 %%{init: {'theme': 'default', 'flowchart': {'useMaxWidth': true}}}%%
 flowchart TD
-    A[Web Research] --> B[Discovery]
+    A[Web Research]
+    A --> B[Discovery]
     A --> C[Content]
     A --> D[Interaction]
+
     B --> E[search · map]
     C --> F[scrape · crawl · extract]
-    D --> G[browser]
-    E --> H[(SearXNG)]
+    D --> G[stateful browser]
+
+    E --> H[(SearXNG + Firecrawl)]
     F --> I[(Firecrawl + Ollama)]
     G --> J[(Playwright)]
 ```
 
-Application code can therefore depend on the **Web Research contract** rather than directly on Firecrawl, SearXNG, Ollama, or Playwright.
+Call it through:
+
+``` text
+REST  -> http://127.0.0.1:8080
+MCP   -> http://127.0.0.1:8081/mcp
+UI    -> http://127.0.0.1:8080/ui
+```
+
+The key architectural boundary is simple:
+
+> **Applications depend on the Web Research contract, not directly on
+> Firecrawl, SearXNG, Ollama, or Playwright.**
+
+That keeps the research layer self-hosted, testable, replaceable, and
+usable from both deterministic application code and agentic systems.
