@@ -189,8 +189,6 @@ web-research/
 │   ├── live_mcp.py
 │   ├── test_http_security.py
 │   └── test_security.py
-└── .github/workflows/
-    └── ci.yml
 ```
 
 Runtime data is stored under `data/` and is excluded from Git.
@@ -1421,21 +1419,6 @@ ALL TESTS PASSED
 
 Use the complete suite before accepting upgrades to Firecrawl,
 Playwright, Python dependencies, or other infrastructure components.
-
-## CI expectations
-
-At minimum, CI should verify:
-
-``` text
-unit/regression tests
-static Python linting
-format consistency
-docker compose config
-Docker image builds
-```
-
-Recommended additional checks include ShellCheck for shell scripts and
-dependency/container vulnerability scanning.
 
 # Operations and troubleshooting
 
