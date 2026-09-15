@@ -1,13 +1,16 @@
 import asyncio
 import base64
+import json
+import logging
 import os
+import re
 import time
 import uuid
 from dataclasses import dataclass
 from typing import Literal
 
 import httpx
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 from playwright.async_api import Browser, BrowserContext, Locator, Page, async_playwright
 
@@ -16,6 +19,7 @@ from common.logging import configure_logging
 from interact.security import UnsafeUrl, is_consequential, validate_public_url
 
 configure_logging("interact")
+_logger = logging.getLogger("interact")
 
 MAX_SESSIONS = int(os.getenv("INTERACT_MAX_SESSIONS", "6"))
 TTL = int(os.getenv("INTERACT_SESSION_TTL_SECONDS", "900"))
@@ -186,17 +190,33 @@ async def navigate(session_id: str, req: NavigateRequest):
 
 
 async def _interactive_candidates(page: Page) -> list[dict]:
-    return await page.locator("a,button,input,textarea,select,[role=button],[role=link]").evaluate_all(
-        """els => els.slice(0,200).map((e,i) => ({
+    return await page.locator(":is(a,button,input,textarea,select,[role=button],[role=link]):visible").evaluate_all(
+        """els => els.slice(0,60).map((e,i) => ({
           index:i,
           tag:e.tagName.toLowerCase(),
-          text:(e.innerText || e.value || e.getAttribute('aria-label') || e.getAttribute('placeholder') || '').trim().slice(0,160),
+          text:(e.innerText || e.value || e.getAttribute('aria-label') || e.getAttribute('placeholder') || '').trim().slice(0,120),
           id:e.id || null,
           name:e.getAttribute('name'),
           role:e.getAttribute('role'),
           type:e.getAttribute('type')
         }))"""
     )
+
+
+def _parse_index(raw: str) -> int:
+    raw = raw.strip()
+    try:
+        data = json.loads(raw)
+        if isinstance(data, dict):
+            return int(data["index"])
+        if isinstance(data, int):
+            return data
+    except (json.JSONDecodeError, KeyError, ValueError, TypeError):
+        pass
+    m = re.search(r"\b\d+\b", raw)
+    if m:
+        return int(m.group())
+    raise ValueError(f"Could not parse index from: {raw[:200]!r}")
 
 
 async def _resolve_locator(page: Page, description: str) -> Locator:
@@ -217,6 +237,7 @@ async def _resolve_locator(page: Page, description: str) -> Locator:
     candidates = await _interactive_candidates(page)
     if not candidates:
         raise HTTPException(404, "No interactive elements found")
+    _logger.debug("Resolving description %r from %d candidates", description, len(candidates))
 
     schema = {
         "type": "object",
@@ -238,14 +259,23 @@ async def _resolve_locator(page: Page, description: str) -> Locator:
         async with httpx.AsyncClient(timeout=OLLAMA_TIMEOUT) as client:
             r = await client.post(f"{OLLAMA}/api/chat", json=payload)
         r.raise_for_status()
-        import json
-        chosen = json.loads(r.json()["message"]["content"])["index"]
+        raw = r.json()["message"]["content"]
+        chosen = _parse_index(raw)
+    except httpx.HTTPStatusError as exc:
+        body = exc.response.text[:2000]
+        _logger.warning("Ollama selector returned %s: %s", exc.response.status_code, body)
+        raise HTTPException(502, f"Ollama selector HTTP {exc.response.status_code}: {body}")
+    except (httpx.HTTPError, json.JSONDecodeError, KeyError) as exc:
+        _logger.warning("Ollama selector call failed: %s", exc)
+        raise HTTPException(502, f"LLM selector resolution failed: {exc}")
     except Exception as exc:
+        _logger.warning("Ollama selector unexpected failure: %s", exc)
         raise HTTPException(502, f"LLM selector resolution failed: {exc}")
 
     if chosen < 0 or chosen >= len(candidates):
         raise HTTPException(422, "LLM selected an invalid element")
-    return page.locator("a,button,input,textarea,select,[role=button],[role=link]").nth(chosen)
+    _logger.info("Resolved %r to candidate %d/%d: %s", description, chosen, len(candidates), candidates[chosen].get("text", ""))
+    return page.locator(":is(a,button,input,textarea,select,[role=button],[role=link]):visible").nth(chosen)
 
 
 @app.post("/v1/sessions/{session_id}/action")
@@ -293,14 +323,26 @@ async def action(session_id: str, req: ActionRequest):
     except HTTPException:
         raise
     except Exception as exc:
+        _logger.warning("Browser action %s failed: %s", req.action, exc)
         raise HTTPException(502, f"Browser action failed: {exc}")
 
     return {"ok": True, "action": req.action, "url": page.url, "title": await page.title()}
 
 
 @app.get("/v1/sessions/{session_id}/text")
-async def text(session_id: str):
+async def text(session_id: str, wait_ms: int = Query(default=1000, ge=0, le=30000), scroll: bool = Query(default=False)):
     page = _get(session_id).page
+    try:
+        await page.wait_for_load_state("networkidle", timeout=10000)
+    except Exception:
+        pass
+    if scroll:
+        try:
+            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+        except Exception:
+            pass
+    if wait_ms:
+        await page.wait_for_timeout(wait_ms)
     body = await page.locator("body").inner_text()
     return {"url": page.url, "title": await page.title(), "text": body[:MAX_TEXT], "truncated": len(body) > MAX_TEXT}
 

@@ -29,6 +29,7 @@ class ExtractGatewayRequest(BaseModel):
     instruction: str = "Extract the requested fields from the supplied content."
     model: str | None = None
     max_retries: int | None = None
+    limit: int | None = None
 
     @model_validator(mode="after")
     def require_source(self):
@@ -37,10 +38,10 @@ class ExtractGatewayRequest(BaseModel):
         return self
 
 
-async def _json_proxy(method: str, url: str, request: Request, payload: Any | None = None):
+async def _json_proxy(method: str, url: str, request: Request, payload: Any | None = None, params: Any | None = None):
     headers = {"x-request-id": request.state.request_id}
     async with httpx.AsyncClient(timeout=TIMEOUT) as client:
-        r = await client.request(method, url, json=payload, headers=headers)
+        r = await client.request(method, url, json=payload, params=params, headers=headers)
     try:
         body = r.json()
     except Exception:
@@ -119,6 +120,8 @@ async def extract(req: ExtractGatewayRequest, request: Request):
         payload["model"] = req.model
     if req.max_retries is not None:
         payload["max_retries"] = req.max_retries
+    if req.limit is not None:
+        payload["limit"] = req.limit
     return await _json_proxy("POST", f"{EXTRACT}/v1/extract", request, payload)
 
 
@@ -144,7 +147,7 @@ async def action(session_id: str, payload: dict[str, Any], request: Request):
 
 @app.get("/v1/interact/sessions/{session_id}/text")
 async def page_text(session_id: str, request: Request):
-    return await _json_proxy("GET", f"{INTERACT}/v1/sessions/{session_id}/text", request)
+    return await _json_proxy("GET", f"{INTERACT}/v1/sessions/{session_id}/text", request, params=request.query_params)
 
 
 @app.get("/v1/interact/sessions/{session_id}/screenshot")

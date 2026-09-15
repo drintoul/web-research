@@ -33,6 +33,7 @@ class ExtractRequest(BaseModel):
     source_url: str | None = None
     model: str | None = None
     max_retries: int | None = Field(default=None, ge=0, le=5)
+    limit: int | None = Field(default=None, ge=1, le=20)
 
 
 class SchemaSuggestRequest(BaseModel):
@@ -56,12 +57,37 @@ async def health():
         return {"ok": False, "ollama": False}
 
 
+def _is_empty(value: Any) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return value.strip() == ""
+    if isinstance(value, (list, tuple)):
+        return len(value) == 0 or all(_is_empty(v) for v in value)
+    if isinstance(value, dict):
+        return len(value) == 0 or all(_is_empty(v) for v in value.values())
+    return False
+
+
 @app.post("/v1/extract")
 async def extract(req: ExtractRequest):
     content = req.content[:MAX_CONTENT]
     model = req.model or DEFAULT_MODEL
     retries = MAX_RETRIES if req.max_retries is None else req.max_retries
-    validator = Draft202012Validator(req.schema_)
+
+    if req.limit and req.limit > 1:
+        schema: dict[str, Any] = {
+            "type": "array",
+            "minItems": req.limit,
+            "maxItems": req.limit,
+            "items": req.schema_,
+        }
+        instruction = f"{req.instruction} Return exactly {req.limit} items."
+    else:
+        schema = req.schema_
+        instruction = req.instruction
+
+    validator = Draft202012Validator(schema)
 
     system = (
         "You are a deterministic information extraction engine. Use only the supplied content. "
@@ -72,9 +98,9 @@ async def extract(req: ExtractRequest):
     last_error = None
     for attempt in range(1, retries + 2):
         user = (
-            f"Instruction:\n{req.instruction}\n\n"
+            f"Instruction:\n{instruction}\n\n"
             f"Content:\n{content}\n\n"
-            "Return an object conforming exactly to the provided JSON schema."
+            "Return JSON conforming exactly to the provided JSON schema."
         )
         if last_error:
             user += f"\n\nPrevious output failed validation: {last_error}. Correct it."
@@ -82,7 +108,7 @@ async def extract(req: ExtractRequest):
         payload = {
             "model": model,
             "stream": False,
-            "format": req.schema_,
+            "format": schema,
             "options": {"temperature": 0},
             "messages": [
                 {"role": "system", "content": system},
@@ -96,6 +122,9 @@ async def extract(req: ExtractRequest):
             response.raise_for_status()
             raw = response.json()["message"]["content"]
             data = json.loads(raw)
+            if _is_empty(data):
+                last_error = "Extracted data is empty; use the supplied content and return real values"
+                continue
             errors = sorted(validator.iter_errors(data), key=lambda e: list(e.path))
             if errors:
                 last_error = "; ".join(e.message for e in errors[:5])

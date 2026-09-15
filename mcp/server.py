@@ -22,9 +22,9 @@ async def _post(path: str, payload: dict[str, Any]) -> Any:
         return r.json()
 
 
-async def _get(path: str) -> Any:
+async def _get(path: str, params: dict[str, Any] | None = None) -> Any:
     async with httpx.AsyncClient(timeout=180) as client:
-        r = await client.get(f"{GATEWAY}{path}", headers=_headers())
+        r = await client.get(f"{GATEWAY}{path}", params=params, headers=_headers())
         r.raise_for_status()
         return r.json()
 
@@ -78,9 +78,13 @@ async def crawl_status(job_id: str) -> Any:
 
 
 @mcp.tool
-async def extract(url: str, schema: dict[str, Any], instruction: str = "Extract the requested fields.", options: dict[str, Any] | None = None) -> Any:
-    """Scrape a URL, then extract structured JSON using Ollama and the provided JSON Schema."""
-    payload = {"url": url, "schema": schema, "instruction": instruction}
+async def extract(schema: dict[str, Any], instruction: str = "Extract the requested fields.", url: str | None = None, content: str | None = None, options: dict[str, Any] | None = None) -> Any:
+    """Extract structured JSON from a URL or from supplied content using the provided JSON Schema."""
+    payload: dict[str, Any] = {"schema": schema, "instruction": instruction}
+    if url:
+        payload["url"] = url
+    if content:
+        payload["content"] = content
     if options:
         payload.update(options)
     return await _post("/v1/extract", payload)
@@ -127,9 +131,10 @@ async def browser_action(
 
 
 @mcp.tool
-async def browser_text(session_id: str) -> Any:
-    """Read visible page text from a browser session."""
-    return await _get(f"/v1/interact/sessions/{session_id}/text")
+async def browser_text(session_id: str, options: dict[str, Any] | None = None) -> Any:
+    """Read visible page text from a browser session. Options: wait_ms (int), scroll (bool)."""
+    params = {k: v for k, v in (options or {}).items() if k in ("wait_ms", "scroll")}
+    return await _get(f"/v1/interact/sessions/{session_id}/text", params)
 
 
 @mcp.tool
