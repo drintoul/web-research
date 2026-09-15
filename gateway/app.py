@@ -222,7 +222,13 @@ def _get_ui_html() -> str:
     if _UI_HTML is None:
         ui_path = os.path.join(os.path.dirname(__file__), "..", "ui", "index.html")
         with open(ui_path, "r") as f:
-            _UI_HTML = f.read()
+            html = f.read()
+        if not os.getenv("GATEWAY_API_KEY", "").strip():
+            html = html.replace(
+                '<div class="mt-3" id="api-key-section">',
+                '<div class="mt-3 hidden" id="api-key-section">',
+            )
+        _UI_HTML = html
     return _UI_HTML
 
 

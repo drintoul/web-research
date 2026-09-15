@@ -36,7 +36,7 @@
           <span class="font-mono font-semibold text-slate-800 ml-1">http://127.0.0.1:8081/mcp</span>
         </span>
       </div>
-      <div class="mt-3">
+      <div class="mt-3" id="api-key-section">
         <label class="block text-sm font-medium mb-1">API key <span class="font-normal text-slate-500">— optional; sent as Authorization: Bearer when set</span></label>
         <input id="api-key" type="password" value="" placeholder="paste your gateway key" class="w-full md:w-1/2 border rounded px-3 py-1 font-mono text-sm" />
       </div>
@@ -60,19 +60,33 @@
         </div>
         <div class="mt-2">
           <label class="block text-sm font-medium mb-1">Formats <span class="font-normal text-slate-500">(Ctrl/Cmd to select multiple)</span></label>
-          <select id="scrape-formats" multiple size="7" class="w-full border rounded p-2 font-mono text-sm md:w-1/2">
+          <select id="scrape-formats" multiple size="12" class="w-full border rounded p-2 font-mono text-sm md:w-1/2">
             <option value="markdown" selected>markdown</option>
             <option value="html">html</option>
+            <option value="rawHtml">rawHtml</option>
+            <option value="rawBase64">rawBase64</option>
             <option value="links">links</option>
+            <option value="images">images</option>
             <option value="screenshot">screenshot</option>
-            <option value="json">json</option>
+            <option value="audio">audio</option>
+            <option value="video">video</option>
+            <option value="summary">summary</option>
+            <option value="question">question</option>
+            <option value="highlights">highlights</option>
+            <option value="changeTracking">changeTracking</option>
+            <option value="branding">branding</option>
             <option value="product">product</option>
+            <option value="menu">menu</option>
+            <option value="json">json</option>
             <option value="extract">extract</option>
           </select>
         </div>
-        <div class="mt-2 flex items-center gap-4">
+        <div class="mt-2 flex items-center gap-4 flex-wrap">
           <label class="text-sm text-slate-600 flex items-center gap-1">
             <input type="checkbox" id="scrape-only-main" class="rounded" /> Only main content
+          </label>
+          <label class="text-sm text-slate-600 flex items-center gap-1">
+            <input type="checkbox" id="scrape-only-clean" class="rounded" /> Only clean content
           </label>
           <label class="text-sm text-slate-600 flex items-center gap-1">
             <input type="checkbox" id="scrape-mobile" class="rounded" /> Mobile viewport
@@ -81,14 +95,44 @@
             <input type="checkbox" id="scrape-skip-tls" class="rounded" /> Skip TLS verification
           </label>
         </div>
+        <div class="mt-2 flex items-center gap-4 flex-wrap">
+          <label class="text-sm text-slate-600 flex items-center gap-1">
+            <input type="checkbox" id="scrape-remove-base64" class="rounded" /> Remove base64 images
+          </label>
+          <label class="text-sm text-slate-600 flex items-center gap-1">
+            <input type="checkbox" id="scrape-block-ads" class="rounded" checked /> Block ads
+          </label>
+          <label class="text-sm text-slate-600 flex items-center gap-1">
+            <input type="checkbox" id="scrape-store-cache" class="rounded" checked /> Store in cache
+          </label>
+          <label class="text-sm text-slate-600 flex items-center gap-1">
+            <input type="checkbox" id="scrape-lockdown" class="rounded" /> Lockdown
+          </label>
+          <label class="text-sm text-slate-600 flex items-center gap-1">
+            <input type="checkbox" id="scrape-redact-pii" class="rounded" /> Redact PII
+          </label>
+          <label class="text-sm text-slate-600 flex items-center gap-1">
+            <input type="checkbox" id="scrape-zdr" class="rounded" /> Zero data retention
+          </label>
+        </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
           <div>
-            <label class="block text-sm font-medium mb-1">Timeout <span class="font-normal text-slate-500">— ms</span></label>
-            <input id="scrape-timeout" type="number" class="w-full border rounded px-3 py-1 font-mono text-sm" value="30000" min="1" />
+            <label class="block text-sm font-medium mb-1">Timeout <span class="font-normal text-slate-500">— ms (1000-300000)</span></label>
+            <input id="scrape-timeout" type="number" class="w-full border rounded px-3 py-1 font-mono text-sm" value="30000" min="1000" max="300000" />
           </div>
           <div>
             <label class="block text-sm font-medium mb-1">Wait for <span class="font-normal text-slate-500">— ms</span></label>
             <input id="scrape-wait-for" type="number" class="w-full border rounded px-3 py-1 font-mono text-sm" value="1000" min="0" />
+          </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+          <div>
+            <label class="block text-sm font-medium mb-1">Max age <span class="font-normal text-slate-500">— ms</span></label>
+            <input id="scrape-max-age" type="number" class="w-full border rounded px-3 py-1 font-mono text-sm" placeholder="172800000" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Min age <span class="font-normal text-slate-500">— ms</span></label>
+            <input id="scrape-min-age" type="number" class="w-full border rounded px-3 py-1 font-mono text-sm" placeholder="1" />
           </div>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
@@ -101,10 +145,32 @@
             <input id="scrape-exclude-tags" type="text" class="w-full border rounded px-3 py-1 font-mono text-sm" placeholder="nav, footer, .ads" />
           </div>
         </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
+          <div>
+            <label class="block text-sm font-medium mb-1">Location country</label>
+            <input id="scrape-location-country" type="text" class="w-full border rounded px-3 py-1 font-mono text-sm" placeholder="US" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Languages <span class="font-normal text-slate-500">— comma-separated</span></label>
+            <input id="scrape-location-languages" type="text" class="w-full border rounded px-3 py-1 font-mono text-sm" placeholder="en-US, fr-CA" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Proxy</label>
+            <select id="scrape-proxy" class="w-full border rounded p-2 font-mono text-sm">
+              <option value="auto" selected>auto</option>
+              <option value="basic">basic</option>
+              <option value="enhanced">enhanced</option>
+            </select>
+          </div>
+        </div>
+        <div class="mt-2">
+          <label class="block text-sm font-medium mb-1">Parsers <span class="font-normal text-slate-500">(comma-separated, e.g. pdf)</span></label>
+          <input id="scrape-parsers" type="text" class="w-full border rounded px-3 py-1 font-mono text-sm" placeholder="pdf" />
+        </div>
         <div class="mt-2">
           <label class="block text-sm font-medium mb-1">Advanced options <span class="font-normal text-slate-500">(JSON, optional; controls above take precedence)</span></label>
           <textarea id="scrape-advanced" rows="2" class="w-full border rounded p-2 font-mono text-sm" placeholder='{ "headers": {"Accept-Language": "en-US"}, "extract": {...} }'></textarea>
-          <p class="text-xs text-slate-500 mt-1">Common keys: <code>headers</code>, <code>extract</code> (schema).</p>
+          <p class="text-xs text-slate-500 mt-1">Common keys: <code>headers</code>, <code>extract</code> (schema), <code>actions</code>.</p>
         </div>
         <div class="mt-2">
           <label class="block text-sm font-medium mb-1">JSON body</label>
@@ -129,18 +195,53 @@
         <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
           <div>
             <label class="block text-sm font-medium mb-1">URL <span class="font-normal text-slate-500">— site to map</span></label>
-            <input id="map-url" type="text" class="w-full border rounded px-3 py-1 font-mono text-sm" value="https://www.princess.com" />
+            <input id="map-url" type="text" class="w-full border rounded px-3 py-1 font-mono text-sm" value="https://www.princess.com" title="Base URL to start mapping from." />
           </div>
           <div>
             <label class="block text-sm font-medium mb-1">Limit <span class="font-normal text-slate-500">— number of links</span></label>
-            <input id="map-limit" type="number" class="w-full border rounded px-3 py-1 font-mono text-sm" value="10" min="1" max="100" />
+            <input id="map-limit" type="number" class="w-full border rounded px-3 py-1 font-mono text-sm" value="10" min="1" max="100000" title="Maximum number of links to return (up to 100000)." />
           </div>
         </div>
-        <div class="mt-2 flex items-center gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+          <div>
+            <label class="block text-sm font-medium mb-1">Search query <span class="font-normal text-slate-500">— order results by relevance</span></label>
+            <input id="map-search" type="text" class="w-full border rounded px-3 py-1 font-mono text-sm" placeholder="blog" title="Optional query to order mapped URLs by relevance." />
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Sitemap mode</label>
+            <select id="map-sitemap" class="w-full border rounded p-2 font-mono text-sm" title="Sitemap mode: include uses sitemap and crawl, skip avoids sitemap, only returns sitemap URLs.">
+              <option value="include" selected>include</option>
+              <option value="skip">skip</option>
+              <option value="only">only</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
+          <div>
+            <label class="block text-sm font-medium mb-1">Location country</label>
+            <input id="map-location-country" type="text" class="w-full border rounded px-3 py-1 font-mono text-sm" value="CA" placeholder="US" title="ISO country code for proxy and timezone emulation." />
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Languages <span class="font-normal text-slate-500">— comma-separated</span></label>
+            <input id="map-location-languages" type="text" class="w-full border rounded px-3 py-1 font-mono text-sm" value="en-CA, fr-CA" placeholder="en-CA, fr-CA" title="Comma-separated language codes (e.g. en-CA) for language emulation." />
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Timeout <span class="font-normal text-slate-500">— ms</span></label>
+            <input id="map-timeout" type="number" class="w-full border rounded px-3 py-1 font-mono text-sm" value="60000" min="1" title="Request timeout in milliseconds." />
+          </div>
+        </div>
+        <div class="mt-2 flex items-center gap-4 flex-wrap">
           <label class="text-sm text-slate-600 flex items-center gap-1">
-            <input type="checkbox" id="map-subdomains" class="rounded" checked /> Include subdomains <span class="font-normal text-slate-500">— also crawl links on subdomains</span>
+            <input type="checkbox" id="map-subdomains" class="rounded" checked title="Include links discovered on subdomains." /> Include subdomains
+          </label>
+          <label class="text-sm text-slate-600 flex items-center gap-1">
+            <input type="checkbox" id="map-ignore-query-params" class="rounded" title="Do not return URLs that include query parameters." /> Ignore query parameters
+          </label>
+          <label class="text-sm text-slate-600 flex items-center gap-1">
+            <input type="checkbox" id="map-ignore-cache" class="rounded" title="Bypass the 7-day sitemap cache for fresh results." /> Ignore cache
           </label>
         </div>
+        <p class="text-xs text-slate-500 mt-1">Use <code>sitemap: only</code> for sitemap-only URLs, <code>skip</code> to avoid the sitemap, and <code>ignoreCache</code> after a recent sitemap update.</p>
         <div class="mt-2 flex items-center gap-2">
           <button onclick="buildMapRequest()" class="bg-emerald-600 text-white px-4 py-2 rounded">Build request</button>
           <span class="text-xs text-slate-500">Step 1: build the JSON body from the controls (you can edit it before sending)</span>
@@ -167,7 +268,21 @@
           </div>
           <div>
             <label class="block text-sm font-medium mb-1">Limit <span class="font-normal text-slate-500">— max pages to crawl</span></label>
-            <input id="crawl-limit" type="number" class="w-full border rounded px-3 py-1 font-mono text-sm" value="10" min="1" max="100" />
+            <input id="crawl-limit" type="number" class="w-full border rounded px-3 py-1 font-mono text-sm" value="10" min="1" max="10000" />
+          </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+          <div>
+            <label class="block text-sm font-medium mb-1">Prompt <span class="font-normal text-slate-500">— generate options from natural language</span></label>
+            <input id="crawl-prompt" type="text" class="w-full border rounded px-3 py-1 font-mono text-sm" placeholder="cruise ships and deck plans" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Sitemap mode</label>
+            <select id="crawl-sitemap" class="w-full border rounded p-2 font-mono text-sm">
+              <option value="include" selected>include</option>
+              <option value="skip">skip</option>
+              <option value="only">only</option>
+            </select>
           </div>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
@@ -176,12 +291,8 @@
             <input id="crawl-depth" type="number" class="w-full border rounded px-3 py-1 font-mono text-sm" value="2" min="0" />
           </div>
           <div>
-            <label class="block text-sm font-medium mb-1">Crawl entire domain</label>
-            <div class="mt-2 flex items-center gap-2">
-              <label class="text-sm text-slate-600 flex items-center gap-1">
-                <input type="checkbox" id="crawl-entire-domain" class="rounded" /> Discover all linked pages on this domain
-              </label>
-            </div>
+            <label class="block text-sm font-medium mb-1">Max concurrency <span class="font-normal text-slate-500">— parallel scrapes</span></label>
+            <input id="crawl-concurrency" type="number" class="w-full border rounded px-3 py-1 font-mono text-sm" placeholder="5" min="1" />
           </div>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
@@ -194,15 +305,48 @@
             <input id="crawl-exclude" type="text" class="w-full border rounded px-3 py-1 font-mono text-sm" placeholder=".*/blog/.*, /help" />
           </div>
         </div>
-        <div class="mt-2 flex items-center gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+          <div>
+            <label class="block text-sm font-medium mb-1">Delay <span class="font-normal text-slate-500">— seconds between scrapes</span></label>
+            <input id="crawl-delay" type="number" class="w-full border rounded px-3 py-1 font-mono text-sm" value="0" min="0" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Robots user agent <span class="font-normal text-slate-500">— custom UA for robots.txt</span></label>
+            <input id="crawl-robots-ua" type="text" class="w-full border rounded px-3 py-1 font-mono text-sm" placeholder="Firecrawl/1.0" />
+          </div>
+        </div>
+        <div class="mt-2 flex items-center gap-4 flex-wrap">
           <label class="text-sm text-slate-600 flex items-center gap-1">
-            <input type="checkbox" id="crawl-scrape" class="rounded" checked /> Scrape each page as markdown
+            <input type="checkbox" id="crawl-entire-domain" class="rounded" /> Crawl entire domain
+          </label>
+          <label class="text-sm text-slate-600 flex items-center gap-1">
+            <input type="checkbox" id="crawl-allow-external" class="rounded" /> Allow external links
+          </label>
+          <label class="text-sm text-slate-600 flex items-center gap-1">
+            <input type="checkbox" id="crawl-allow-subdomains" class="rounded" /> Allow subdomains
+          </label>
+          <label class="text-sm text-slate-600 flex items-center gap-1">
+            <input type="checkbox" id="crawl-ignore-query-params" class="rounded" /> Ignore query parameters
+          </label>
+          <label class="text-sm text-slate-600 flex items-center gap-1">
+            <input type="checkbox" id="crawl-regex-full-url" class="rounded" /> Regex on full URL
+          </label>
+          <label class="text-sm text-slate-600 flex items-center gap-1">
+            <input type="checkbox" id="crawl-ignore-robots" class="rounded" /> Ignore robots.txt
+          </label>
+          <label class="text-sm text-slate-600 flex items-center gap-1">
+            <input type="checkbox" id="crawl-zdr" class="rounded" /> Zero data retention
           </label>
         </div>
+        <div class="mt-2">
+          <label class="block text-sm font-medium mb-1">Scrape options <span class="font-normal text-slate-500">(JSON applied to every page)</span></label>
+          <textarea id="crawl-scrape-options" rows="3" class="w-full border rounded p-2 font-mono text-sm">{ "formats": ["markdown"], "onlyMainContent": true }</textarea>
+          <p class="text-xs text-slate-500 mt-1">Use any <code>scrapeOptions</code> keys: <code>formats</code>, <code>onlyMainContent</code>, <code>onlyCleanContent</code>, <code>includeTags</code>, <code>excludeTags</code>, <code>timeout</code>, <code>waitFor</code>, <code>location</code>, <code>proxy</code>, <code>blockAds</code>, etc.</p>
+        </div>
         <div class="mt-2 flex flex-wrap gap-2">
-          <button onclick="loadExample('crawl-body', {url: sampleUrl(), limit: 2, includePaths: [], excludePaths: []})" class="text-sm text-blue-600 underline py-2">Basic crawl</button>
-          <button onclick="loadExample('crawl-body', {url: sampleUrl(), limit: 20, maxDiscoveryDepth: 2, includePaths: ['cruise.*'], excludePaths: ['.*/blog/.*'], scrapeOptions: {formats: ['markdown'], onlyMainContent: true}})" class="text-sm text-blue-600 underline py-2">Controlled depth</button>
-          <button onclick="loadExample('crawl-body', {url: sampleUrl(), limit: 50, crawlEntireDomain: true, scrapeOptions: {formats: ['markdown'], onlyMainContent: true}})" class="text-sm text-blue-600 underline py-2">Entire domain</button>
+          <button onclick="{ const u=sampleUrl(); document.getElementById('crawl-url').value=u; loadExample('crawl-body', {url: u, limit: 2, includePaths: [], excludePaths: []}); }" class="text-sm text-blue-600 underline py-2">Basic crawl</button>
+          <button onclick="{ const u=sampleUrl(); document.getElementById('crawl-url').value=u; loadExample('crawl-body', {url: u, limit: 20, maxDiscoveryDepth: 2, includePaths: ['cruise.*'], excludePaths: ['.*/blog/.*'], scrapeOptions: {formats: ['markdown'], onlyMainContent: true}}); }" class="text-sm text-blue-600 underline py-2">Controlled depth</button>
+          <button onclick="{ const u=sampleUrl(); document.getElementById('crawl-url').value=u; loadExample('crawl-body', {url: u, limit: 50, crawlEntireDomain: true, scrapeOptions: {formats: ['markdown'], onlyMainContent: true}}); }" class="text-sm text-blue-600 underline py-2">Entire domain</button>
         </div>
         <div class="mt-2 flex items-center gap-2">
           <button onclick="buildCrawlRequest()" class="bg-emerald-600 text-white px-4 py-2 rounded">Build request</button>
@@ -230,29 +374,88 @@
         <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
           <div>
             <label class="block text-sm font-medium mb-1">Query <span class="font-normal text-slate-500">— main search terms</span></label>
-            <input id="search-query" type="text" class="w-full border rounded px-3 py-1 font-mono text-sm" value="Renaissace Faires in Canada" />
+            <input id="search-query" type="text" class="w-full border rounded px-3 py-1 font-mono text-sm" value="Renaissace Faires in Canada" title="Main search query. Supports operators: phrase, -exclude, site:, filetype:, inurl:, allinurl:, intitle:, allintitle:, related:, imagesize:, larger:" />
           </div>
           <div>
             <label class="block text-sm font-medium mb-1">Limit <span class="font-normal text-slate-500">— number of results</span></label>
-            <input id="search-limit" type="number" class="w-full border rounded px-3 py-1 font-mono text-sm" value="3" min="1" max="50" />
+            <input id="search-limit" type="number" class="w-full border rounded px-3 py-1 font-mono text-sm" value="3" min="1" max="100" title="Maximum number of results to return per source type (1-100)." />
           </div>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
           <div>
             <label class="block text-sm font-medium mb-1">Include terms <span class="font-normal text-slate-500">— appended to query</span></label>
-            <input id="search-include" type="text" class="w-full border rounded px-3 py-1 font-mono text-sm" placeholder="Alaska 2027" />
+            <input id="search-include" type="text" class="w-full border rounded px-3 py-1 font-mono text-sm" placeholder="Alaska 2027" title="Terms appended to the query. Wrap multi-word phrases in quotes." />
           </div>
           <div>
             <label class="block text-sm font-medium mb-1">Exclude terms <span class="font-normal text-slate-500">— negated and appended</span></label>
-            <input id="search-exclude" type="text" class="w-full border rounded px-3 py-1 font-mono text-sm" placeholder='wikipedia "united states"' />
+            <input id="search-exclude" type="text" class="w-full border rounded px-3 py-1 font-mono text-sm" placeholder='wikipedia "united states"' title="Negated terms appended to the query. Wrap multi-word phrases in quotes." />
           </div>
         </div>
-        <p class="text-xs text-slate-500 mt-1">Tip: wrap multi-word phrases in quotes (e.g. "Alaska 2027" or "united states").</p>
-        <p class="text-xs text-slate-600 mt-2">Search is not the same as the Scrape endpoint, but you can still get a markdown snapshot of each result page (or a portion of it) in a single API call.</p>
-        <div class="mt-2 flex items-center gap-4">
-          <label class="text-sm text-slate-600 flex items-center gap-1">
-            <input type="checkbox" id="search-scrape" class="rounded" /> Scrape result pages as markdown
-          </label>
+        <p class="text-xs text-slate-500 mt-1">Tip: wrap multi-word phrases in quotes (e.g. "Alaska 2027" or "united states"). Query operators: <code>""</code>, <code>-</code>, <code>site:</code>, <code>filetype:</code>, <code>inurl:</code>, <code>allinurl:</code>, <code>intitle:</code>, <code>allintitle:</code>, <code>related:</code>, <code>imagesize:</code>, <code>larger:</code>.</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+          <div>
+            <label class="block text-sm font-medium mb-1">Sources <span class="font-normal text-slate-500">(Ctrl/Cmd to select multiple)</span></label>
+            <select id="search-sources" multiple size="3" class="w-full border rounded p-2 font-mono text-sm" title="Sources to search. Defaults to web. Choose multiple to search web, images, and/or news.">
+              <option value="web" selected>web</option>
+              <option value="images">images</option>
+              <option value="news">news</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Categories <span class="font-normal text-slate-500">(Ctrl/Cmd to select multiple)</span></label>
+            <select id="search-categories" multiple size="3" class="w-full border rounded p-2 font-mono text-sm" title="Categories to filter results: developer, research, or pdf.">
+              <option value="developer">developer</option>
+              <option value="research">research</option>
+              <option value="pdf">pdf</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+          <div>
+            <label class="block text-sm font-medium mb-1">Include domains <span class="font-normal text-slate-500">— comma-separated hostnames</span></label>
+            <input id="search-include-domains" type="text" class="w-full border rounded px-3 py-1 font-mono text-sm" placeholder="example.com, docs.example.com" title="Restrict results to these hostnames. Cannot be combined with Exclude domains." />
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Exclude domains <span class="font-normal text-slate-500">— comma-separated hostnames</span></label>
+            <input id="search-exclude-domains" type="text" class="w-full border rounded px-3 py-1 font-mono text-sm" placeholder="wikipedia.org, pinterest.com" title="Exclude these hostnames from results. Cannot be combined with Include domains." />
+          </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
+          <div>
+            <label class="block text-sm font-medium mb-1">Time-based search <span class="font-normal text-slate-500">(tbs)</span></label>
+            <input id="search-tbs" type="text" class="w-full border rounded px-3 py-1 font-mono text-sm" placeholder="qdr:w, sbd:1, cdr:1,cd_min:01/01/2024,cd_max:12/31/2024" title="Time-based search: qdr:h/d/w/m/y, cdr:1 with cd_min/cd_max dates, or sbd:1 to sort by date." />
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Location</label>
+            <input id="search-location" type="text" class="w-full border rounded px-3 py-1 font-mono text-sm" value="Canada" placeholder="San Francisco,California,United States" title="Geo location for results. Best used together with Country." />
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Country <span class="font-normal text-slate-500">— ISO code</span></label>
+            <input id="search-country" type="text" class="w-full border rounded px-3 py-1 font-mono text-sm" value="CA" placeholder="US" title="ISO country code for geo-targeting. Best used together with Location." />
+          </div>
+        </div>
+        <p class="text-xs text-slate-500 mt-1">For best geo results, set both <code>location</code> and <code>country</code>.</p>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
+          <div>
+            <label class="block text-sm font-medium mb-1">Timeout <span class="font-normal text-slate-500">— ms</span></label>
+            <input id="search-timeout" type="number" class="w-full border rounded px-3 py-1 font-mono text-sm" value="60000" min="1" title="Request timeout in milliseconds." />
+          </div>
+          <div class="mt-6 md:mt-0">
+            <label class="text-sm text-slate-600 flex items-center gap-1">
+              <input type="checkbox" id="search-safe" class="rounded" title="Filter explicit content from results (SafeSearch)." /> Safe search
+            </label>
+            <label class="text-sm text-slate-600 flex items-center gap-1">
+              <input type="checkbox" id="search-highlights" class="rounded" checked title="Enabled by default because query-relevant highlights are more useful than raw provider snippets." /> Highlights
+            </label>
+          </div>
+          <div class="mt-6 md:mt-0">
+            <label class="text-sm text-slate-600 flex items-center gap-1">
+              <input type="checkbox" id="search-ignore-invalid" class="rounded" title="Drop URLs that are invalid for other Firecrawl endpoints before returning them." /> Ignore invalid URLs
+            </label>
+            <label class="text-sm text-slate-600 flex items-center gap-1">
+              <input type="checkbox" id="search-scrape" class="rounded" title="Fetch a markdown snapshot of each result page in the same API call." /> Scrape result pages as markdown
+            </label>
+          </div>
         </div>
         <details class="mt-2 border rounded p-2 bg-white group">
           <summary class="text-sm font-medium text-slate-700 cursor-pointer select-none list-none flex items-center gap-2">
@@ -260,7 +463,7 @@
             Advanced options <span class="font-normal text-slate-500">(JSON, optional; controls above take precedence)</span>
           </summary>
           <div class="mt-2">
-            <textarea id="search-advanced" rows="3" class="w-full border rounded p-2 font-mono text-sm" placeholder='{ "scrapeOptions": {"formats": ["markdown", "links"], "onlyMainContent": true} }'></textarea>
+            <textarea id="search-advanced" rows="3" class="w-full border rounded p-2 font-mono text-sm" placeholder='{ "scrapeOptions": {"formats": ["markdown", "links"], "onlyMainContent": true} }' title="JSON object that overrides/extends the controls above; use for scrapeOptions or threatProtection."></textarea>
           </div>
           <p class="text-xs text-slate-500 mt-1">Common <code>scrapeOptions</code> keys: <code>formats</code>, <code>onlyMainContent</code>, <code>includeTags</code>, <code>excludeTags</code>, <code>timeout</code>, <code>headers</code>, <code>waitFor</code>, <code>mobile</code>.</p>
         </details>
@@ -287,34 +490,63 @@
       <!-- Extract -->
       <section id="tab-extract" class="tab-content hidden">
         <div class="mb-2 text-sm text-slate-500">POST <span class="font-mono">/v1/extract</span></div>
-        <label class="block text-sm font-medium mb-1">URL <span class="font-normal text-slate-500">— page used to generate the extraction schema</span></label>
-        <input id="schema-url" type="text" value="https://www.princess.com" class="w-full border rounded px-3 py-2 mb-2 font-mono text-sm" />
+        <label class="block text-sm font-medium mb-1">URL <span class="font-normal text-slate-500">— page to scrape for content (ignored if you provide your own content)</span></label>
+        <input id="schema-url" type="text" value="https://www.princess.com" class="w-full border rounded px-3 py-2 mb-2 font-mono text-sm" title="The page to scrape. The service uses this for both the scrape and the source_url provenance." />
         <div class="flex items-center gap-2 mb-3">
           <button onclick="refreshSchemaUrl()" class="bg-slate-500 text-white px-4 py-2 rounded">Random sample URL</button>
           <span class="text-xs text-slate-500">Step 1: pick a page</span>
         </div>
         <label class="block text-sm font-medium mb-1">Instruction <span class="font-normal text-slate-500">— natural-language description of what to extract</span></label>
-        <input id="schema-instruction" name="schema-instruction" type="text" value="Extract the page title, a one-sentence summary, and the main topic." autocomplete="off" placeholder="e.g. Extract the page title and a short summary" class="w-full border rounded px-3 py-2 mb-2 font-mono text-sm" />
+        <input id="schema-instruction" name="schema-instruction" type="text" value="Extract the page title, a one-sentence summary, and the main topic." autocomplete="off" placeholder="e.g. Extract the page title and a short summary" class="w-full border rounded px-3 py-2 mb-2 font-mono text-sm" title="Plain-text instruction passed to the LLM. Should start with 'Extract...'." />
         <div class="flex items-center gap-2 mb-3">
           <button onclick="suggestInstruction()" class="bg-slate-500 text-white px-4 py-2 rounded">Suggest instruction</button>
           <span class="text-xs text-slate-500">Step 2: describe what to extract</span>
         </div>
-        <button onclick="generateSchema()" class="mb-1 bg-slate-600 text-white px-4 py-2 rounded">Generate / Refresh schema</button>
-        <div class="text-xs text-slate-500 mb-4">Step 3: produce the JSON schema</div>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-2 mt-2">
+          <div>
+            <label class="block text-sm font-medium mb-1">Model</label>
+            <input id="extract-model" type="text" class="w-full border rounded px-3 py-1 font-mono text-sm" value="qwen2.5:14b" title="Ollama model tag used for extraction." />
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Max retries <span class="font-normal text-slate-500">(0-5)</span></label>
+            <input id="extract-max-retries" type="number" class="w-full border rounded px-3 py-1 font-mono text-sm" value="2" min="0" max="5" title="Retry extraction up to 5 times if JSON validation fails." />
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Limit <span class="font-normal text-slate-500">(1-20)</span></label>
+            <input id="extract-limit" type="number" class="w-full border rounded px-3 py-1 font-mono text-sm" value="1" min="1" max="20" title="Return an array of exactly this many items. Use 1 for a single object." />
+          </div>
+          <div class="mt-6 md:mt-0">
+            <label class="text-sm text-slate-600 flex items-center gap-1">
+              <input type="checkbox" id="extract-use-content" class="rounded" onchange="toggleExtractContent()" title="Use pasted content instead of scraping the URL." /> Provide my own content
+            </label>
+          </div>
+        </div>
+        <div id="extract-content-area" class="mt-2 hidden">
+          <label class="block text-sm font-medium mb-1">Content <span class="font-normal text-slate-500">— text to extract from</span></label>
+          <textarea id="extract-content" rows="6" class="w-full border rounded p-2 font-mono text-sm" placeholder="Paste markdown or raw text here" title="When provided, the service uses this text instead of scraping the URL."></textarea>
+        </div>
+        <button onclick="generateSchema()" class="mt-2 mb-1 bg-slate-600 text-white px-4 py-2 rounded">Generate / Refresh schema</button>
+        <div class="text-xs text-slate-500 mb-2">Step 3: produce the JSON schema</div>
+        <button onclick="buildExtractRequest()" class="mb-1 bg-emerald-600 text-white px-4 py-2 rounded">Build request</button>
+        <div class="text-xs text-slate-500 mb-2">Step 4: assemble the JSON body from the controls</div>
         <label class="block text-sm font-medium mb-1">JSON body</label>
         <textarea id="extract-body" rows="16" class="w-full border rounded p-2 font-mono text-sm">{
   "url": "https://www.princess.com",
+  "instruction": "Extract the page title, a one-sentence summary, and the main topic.",
   "schema": {
     "type": "object",
     "properties": {
       "title": { "type": "string" }
     },
     "required": ["title"]
-  }
+  },
+  "model": "qwen2.5:14b",
+  "max_retries": 2,
+  "limit": 1
 }</textarea>
         <div class="mt-2 flex items-center flex-wrap gap-2">
-          <button onclick="sendPost('/v1/extract','extract-body','extract-out')" class="bg-blue-600 text-white px-4 py-2 rounded">Submit</button>
-          <span class="text-xs text-slate-500">Step 4: submit the extraction request</span>
+          <button onclick="buildExtractRequest(); sendPost('/v1/extract','extract-body','extract-out')" class="bg-blue-600 text-white px-4 py-2 rounded">Submit</button>
+          <span class="text-xs text-slate-500">Step 5: build and submit the extraction request</span>
           <button onclick="loadExample('extract-body', {url: sampleUrl(), instruction: 'Extract the page title.', schema: {type: 'object', properties: {title: {type: 'string'}}, required: ['title']}})" class="text-sm text-blue-600 underline py-2">Simple URL</button>
           <button onclick="loadExample('extract-body', {url: sampleUrl(), instruction: 'Extract the page title, a one-sentence summary, and the main topic.', schema: {type: 'object', properties: {title: {type: 'string'}, summary: {type: 'string'}, topic: {type: 'string'}}, required: ['title','summary','topic']}})" class="text-sm text-blue-600 underline py-2">Complex schema</button>
           <button onclick="loadExample('extract-body', {url: sampleUrl(), instruction: 'Extract product details: name, price, rating, and whether it is in stock.', schema: {type: 'object', properties: {name: {type: 'string'}, price: {type: 'string'}, rating: {type: 'string'}, in_stock: {type: 'boolean'}}, required: ['name','price','rating','in_stock']}})" class="text-sm text-blue-600 underline py-2">Product page</button>
@@ -362,13 +594,30 @@
             <input id="navigate-sid" type="text" placeholder="session id" class="sid-input border rounded px-3 py-1 flex-1 font-mono" />
             <button onclick="pasteSid('navigate-sid')" class="bg-slate-500 text-white px-3 py-1 rounded text-sm">Paste</button>
           </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+            <div>
+              <label class="block text-sm font-medium mb-1">URL</label>
+              <input id="navigate-url" type="text" class="w-full border rounded px-3 py-1 font-mono text-sm" value="https://www.princess.com" title="URL to load in the browser session." />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1">Wait until</label>
+              <select id="navigate-wait" class="w-full border rounded p-2 font-mono text-sm" title="Playwright navigation lifecycle to wait for.">
+                <option value="domcontentloaded" selected>domcontentloaded</option>
+                <option value="load">load</option>
+                <option value="networkidle">networkidle</option>
+                <option value="commit">commit</option>
+              </select>
+            </div>
+          </div>
+          <button onclick="buildNavigate()" class="mt-2 bg-emerald-600 text-white px-4 py-2 rounded">Build body</button>
+          <div class="text-xs text-slate-500 mb-2 mt-1">Step 2a: build the navigate payload from the controls</div>
           <label class="block text-sm font-medium mb-1">JSON body <span class="font-normal text-slate-500">— {url, wait_until}</span></label>
           <textarea id="navigate-body" rows="4" class="w-full border rounded p-2 font-mono text-sm">{
   "url": "https://www.princess.com",
   "wait_until": "domcontentloaded"
 }</textarea>
           <button onclick="sendPostDyn('/v1/interact/sessions/' + sid('navigate-sid') + '/navigate','navigate-body','interact-out')" class="mt-2 bg-blue-600 text-white px-4 py-2 rounded">Navigate</button>
-          <div class="text-xs text-slate-500 mt-1">Step 2: load a URL into the session</div>
+          <div class="text-xs text-slate-500 mt-1">Step 2b: load a URL into the session</div>
           <div class="mt-2 flex items-center gap-2">
             <button onclick="preQueryUrl()" class="text-sm bg-emerald-600 text-white px-3 py-1 rounded">Pre-query interactive elements</button>
             <span class="text-xs text-slate-500">Creates a session, navigates, and lists interactive elements</span>
@@ -382,7 +631,18 @@
             <input id="text-sid" type="text" placeholder="session id" class="sid-input border rounded px-3 py-1 flex-1 font-mono" />
             <button onclick="pasteSid('text-sid')" class="bg-slate-500 text-white px-3 py-1 rounded text-sm">Paste</button>
           </div>
-          <button onclick="sendGet('/v1/interact/sessions/' + sid('text-sid') + '/text','interact-out')" class="bg-blue-600 text-white px-4 py-2 rounded">Get Text</button>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+            <div>
+              <label class="block text-sm font-medium mb-1">Wait <span class="font-normal text-slate-500">— ms (0-30000)</span></label>
+              <input id="text-wait-ms" type="number" class="w-full border rounded px-3 py-1 font-mono text-sm" value="1000" min="0" max="30000" title="Extra wait in milliseconds before extracting text." />
+            </div>
+            <div class="mt-6 md:mt-0">
+              <label class="text-sm text-slate-600 flex items-center gap-1">
+                <input type="checkbox" id="text-scroll" class="rounded" title="Scroll to the bottom of the page before extracting text." /> Scroll to bottom
+              </label>
+            </div>
+          </div>
+          <button onclick="getText()" class="mt-2 bg-blue-600 text-white px-4 py-2 rounded">Get Text</button>
           <div class="text-xs text-slate-500 mt-1">Step 3: extract the visible page text</div>
         </div>
 
@@ -409,7 +669,9 @@
           <label class="block text-sm font-medium mb-1">JSON body <span class="font-normal text-slate-500">— {action, selector, value, key}</span></label>
           <textarea id="action-body" rows="5" class="w-full border rounded p-2 font-mono text-sm">{
   "action": "wait",
-  "value": "500"
+  "value": "500",
+  "timeout_ms": 10000,
+  "allow_consequential": false
 }</textarea>
           <button onclick="sendPostDyn('/v1/interact/sessions/' + sid('action-sid') + '/action','action-body','interact-out')" class="mt-2 bg-blue-600 text-white px-4 py-2 rounded">Send Action</button>
           <div class="text-xs text-slate-500 mt-1">Step 3: click, type, or otherwise act on the page</div>
@@ -421,7 +683,7 @@
             <button onclick='loadExample("action-body", {"action": "press", "key": "Enter"})' class="text-sm text-blue-600 underline py-2">Press Enter</button>
             <button onclick='loadExample("action-body", {"action": "wait", "value": "500"})' class="text-sm text-blue-600 underline py-2">Wait</button>
           </div>
-          <p class="mt-2 text-xs text-slate-500">Tip: click <strong>List interactive elements</strong> to see tags, text, names and roles for the current page, then use them as selectors.</p>
+          <p class="mt-2 text-xs text-slate-500">Tip: click <strong>List interactive elements</strong> to see tags, text, names and roles for the current page, then use them as selectors. For <code>click</code>, set <code>allow_consequential</code> to <code>true</code> only after you have explicitly approved the action.</p>
         </div>
 
         <div id="interact-plan" class="interact-content hidden">
@@ -955,6 +1217,25 @@
       }
     }
 
+    function getText() {
+      const id = sid('text-sid');
+      if (!id) { document.getElementById('interact-out').textContent = 'Enter a session id first'; return; }
+      let path = '/v1/interact/sessions/' + encodeURIComponent(id) + '/text';
+      const waitMs = parseInt(document.getElementById('text-wait-ms').value, 10);
+      const scroll = document.getElementById('text-scroll').checked;
+      const params = new URLSearchParams();
+      if (!isNaN(waitMs) && waitMs >= 0) params.set('wait_ms', waitMs);
+      if (scroll) params.set('scroll', 'true');
+      if (params.toString()) path += '?' + params.toString();
+      sendGet(path, 'interact-out');
+    }
+
+    function buildNavigate() {
+      const u = document.getElementById('navigate-url').value.trim() || sampleUrl();
+      const wait = document.getElementById('navigate-wait').value;
+      document.getElementById('navigate-body').value = JSON.stringify({ url: u, wait_until: wait }, null, 2);
+    }
+
     function sendGet(path, outId) {
       handle(path, { headers: { 'Authorization': 'Bearer ' + apiKey() } }, outId);
     }
@@ -976,12 +1257,25 @@
       const url = document.getElementById('scrape-url').value.trim() || sampleUrl();
       const selected = Array.from(document.getElementById('scrape-formats').selectedOptions).map(o => o.value);
       const onlyMain = document.getElementById('scrape-only-main').checked;
+      const onlyClean = document.getElementById('scrape-only-clean').checked;
       const mobile = document.getElementById('scrape-mobile').checked;
       const skipTls = document.getElementById('scrape-skip-tls').checked;
+      const removeBase64 = document.getElementById('scrape-remove-base64').checked;
+      const blockAds = document.getElementById('scrape-block-ads').checked;
+      const storeInCache = document.getElementById('scrape-store-cache').checked;
+      const lockdown = document.getElementById('scrape-lockdown').checked;
+      const redactPII = document.getElementById('scrape-redact-pii').checked;
+      const zdr = document.getElementById('scrape-zdr').checked;
       const timeout = parseInt(document.getElementById('scrape-timeout').value, 10);
       const waitFor = parseInt(document.getElementById('scrape-wait-for').value, 10);
+      const maxAge = parseInt(document.getElementById('scrape-max-age').value, 10);
+      const minAge = parseInt(document.getElementById('scrape-min-age').value, 10);
       const includeTags = document.getElementById('scrape-include-tags').value.trim();
       const excludeTags = document.getElementById('scrape-exclude-tags').value.trim();
+      const locCountry = document.getElementById('scrape-location-country').value.trim();
+      const locLangs = document.getElementById('scrape-location-languages').value.trim().split(',').map(s => s.trim()).filter(Boolean);
+      const proxy = document.getElementById('scrape-proxy').value;
+      const parsers = document.getElementById('scrape-parsers').value.trim().split(',').map(s => s.trim()).filter(Boolean);
       const advanced = document.getElementById('scrape-advanced').value.trim();
       let extra = {};
       if (advanced) {
@@ -990,13 +1284,29 @@
       }
       const body = { ...extra, url };
       if (selected.length) body.formats = selected;
-      if (onlyMain) body.onlyMainContent = true;
-      if (mobile) body.mobile = true;
-      if (skipTls) body.skipTlsVerification = true;
+      body.onlyMainContent = onlyMain;
+      if (onlyClean) body.onlyCleanContent = true;
+      body.mobile = mobile;
+      body.skipTlsVerification = skipTls;
+      if (removeBase64) body.removeBase64Images = true;
+      body.blockAds = blockAds;
+      body.storeInCache = storeInCache;
+      if (lockdown) body.lockdown = true;
+      if (redactPII) body.redactPII = true;
+      if (zdr) body.zeroDataRetention = true;
       if (!isNaN(timeout) && timeout > 0) body.timeout = timeout;
       if (!isNaN(waitFor) && waitFor >= 0) body.waitFor = waitFor;
+      if (!isNaN(maxAge) && maxAge > 0) body.maxAge = maxAge;
+      if (!isNaN(minAge) && minAge > 0) body.minAge = minAge;
       if (includeTags) body.includeTags = includeTags.split(',').map(s => s.trim()).filter(Boolean);
       if (excludeTags) body.excludeTags = excludeTags.split(',').map(s => s.trim()).filter(Boolean);
+      if (locCountry || locLangs.length) {
+        body.location = {};
+        if (locCountry) body.location.country = locCountry;
+        if (locLangs.length) body.location.languages = locLangs;
+      }
+      if (proxy && proxy !== 'auto') body.proxy = proxy;
+      if (parsers.length) body.parsers = parsers;
       const scrapeBody = document.getElementById('scrape-body');
       const scrapeBodyText = JSON.stringify(body, null, 2);
       scrapeBody.value = scrapeBodyText;
@@ -1014,6 +1324,17 @@
       }
       const limit = parseInt(document.getElementById('search-limit').value, 10) || 3;
       const scrape = document.getElementById('search-scrape').checked;
+      const sources = Array.from(document.getElementById('search-sources').selectedOptions).map(o => o.value);
+      const categories = Array.from(document.getElementById('search-categories').selectedOptions).map(o => o.value);
+      const includeDomains = document.getElementById('search-include-domains').value.trim().split(',').map(s => s.trim()).filter(Boolean);
+      const excludeDomains = document.getElementById('search-exclude-domains').value.trim().split(',').map(s => s.trim()).filter(Boolean);
+      const tbs = document.getElementById('search-tbs').value.trim();
+      const location = document.getElementById('search-location').value.trim();
+      const country = document.getElementById('search-country').value.trim();
+      const timeout = parseInt(document.getElementById('search-timeout').value, 10);
+      const safe = document.getElementById('search-safe').checked;
+      const highlights = document.getElementById('search-highlights').checked;
+      const ignoreInvalid = document.getElementById('search-ignore-invalid').checked;
       const advanced = document.getElementById('search-advanced').value.trim();
       let extra = {};
       if (advanced) {
@@ -1021,6 +1342,17 @@
         catch (e) { document.getElementById('search-out').textContent = 'Invalid advanced options JSON: ' + e.message; return; }
       }
       const body = { ...extra, query, limit };
+      if (sources.length) body.sources = sources;
+      if (categories.length) body.categories = categories;
+      if (includeDomains.length) body.includeDomains = includeDomains;
+      if (excludeDomains.length) body.excludeDomains = excludeDomains;
+      if (tbs) body.tbs = tbs;
+      if (location) body.location = location;
+      if (country) body.country = country;
+      if (!isNaN(timeout) && timeout > 0) body.timeout = timeout;
+      if (safe) body.safe = true;
+      if (highlights) body.highlights = true;
+      if (ignoreInvalid) body.ignoreInvalidURLs = true;
       if (scrape) body.scrapeOptions = { formats: ['markdown'], onlyMainContent: true };
       const searchBody = document.getElementById('search-body');
       const bodyText = JSON.stringify(body, null, 2);
@@ -1032,7 +1364,24 @@
       const mapUrl = document.getElementById('map-url').value.trim() || sampleUrl();
       const limit = parseInt(document.getElementById('map-limit').value, 10) || 10;
       const includeSubdomains = document.getElementById('map-subdomains').checked;
+      const search = document.getElementById('map-search').value.trim();
+      const sitemap = document.getElementById('map-sitemap').value;
+      const ignoreQueryParameters = document.getElementById('map-ignore-query-params').checked;
+      const ignoreCache = document.getElementById('map-ignore-cache').checked;
+      const locCountry = document.getElementById('map-location-country').value.trim();
+      const locLangs = document.getElementById('map-location-languages').value.trim().split(',').map(s => s.trim()).filter(Boolean);
+      const timeout = parseInt(document.getElementById('map-timeout').value, 10);
       const body = { url: mapUrl, limit, includeSubdomains };
+      if (search) body.search = search;
+      if (sitemap) body.sitemap = sitemap;
+      if (ignoreQueryParameters) body.ignoreQueryParameters = true;
+      if (ignoreCache) body.ignoreCache = true;
+      if (locCountry || locLangs.length) {
+        body.location = {};
+        if (locCountry) body.location.country = locCountry;
+        if (locLangs.length) body.location.languages = locLangs;
+      }
+      if (!isNaN(timeout) && timeout > 0) body.timeout = timeout;
       const mapBody = document.getElementById('map-body');
       const mapBodyText = JSON.stringify(body, null, 2);
       mapBody.value = mapBodyText;
@@ -1050,17 +1399,42 @@
     function buildCrawlRequest() {
       const url = document.getElementById('crawl-url').value.trim() || sampleUrl();
       const limit = parseInt(document.getElementById('crawl-limit').value, 10) || 10;
-      const maxDiscoveryDepth = parseInt(document.getElementById('crawl-max-depth').value, 10);
+      const maxDiscoveryDepth = parseInt(document.getElementById('crawl-depth').value, 10);
       const entireDomain = document.getElementById('crawl-entire-domain').checked;
+      const allowExternal = document.getElementById('crawl-allow-external').checked;
+      const allowSubdomains = document.getElementById('crawl-allow-subdomains').checked;
+      const ignoreQuery = document.getElementById('crawl-ignore-query-params').checked;
+      const regexFullURL = document.getElementById('crawl-regex-full-url').checked;
+      const ignoreRobots = document.getElementById('crawl-ignore-robots').checked;
+      const zdr = document.getElementById('crawl-zdr').checked;
+      const prompt = document.getElementById('crawl-prompt').value.trim();
+      const sitemap = document.getElementById('crawl-sitemap').value;
       const include = document.getElementById('crawl-include').value.trim();
       const exclude = document.getElementById('crawl-exclude').value.trim();
-      const scrape = document.getElementById('crawl-scrape').checked;
+      const delay = parseInt(document.getElementById('crawl-delay').value, 10);
+      const maxConcurrency = parseInt(document.getElementById('crawl-concurrency').value, 10);
+      const robotsUserAgent = document.getElementById('crawl-robots-ua').value.trim();
+      const scrapeOptionsText = document.getElementById('crawl-scrape-options').value.trim();
       const body = { url, limit };
+      if (prompt) body.prompt = prompt;
       if (!isNaN(maxDiscoveryDepth) && maxDiscoveryDepth >= 0) body.maxDiscoveryDepth = maxDiscoveryDepth;
-      if (entireDomain) body.crawlEntireDomain = true;
+      if (sitemap) body.sitemap = sitemap;
       if (include) body.includePaths = include.split(',').map(s => s.trim()).filter(Boolean);
       if (exclude) body.excludePaths = exclude.split(',').map(s => s.trim()).filter(Boolean);
-      if (scrape) body.scrapeOptions = { formats: ['markdown'], onlyMainContent: true };
+      if (entireDomain) body.crawlEntireDomain = true;
+      if (allowExternal) body.allowExternalLinks = true;
+      if (allowSubdomains) body.allowSubdomains = true;
+      if (ignoreQuery) body.ignoreQueryParameters = true;
+      if (regexFullURL) body.regexOnFullURL = true;
+      if (ignoreRobots) body.ignoreRobotsTxt = true;
+      if (robotsUserAgent) body.robotsUserAgent = robotsUserAgent;
+      if (!isNaN(delay) && delay >= 0) body.delay = delay;
+      if (!isNaN(maxConcurrency) && maxConcurrency > 0) body.maxConcurrency = maxConcurrency;
+      if (scrapeOptionsText) {
+        try { body.scrapeOptions = JSON.parse(scrapeOptionsText); }
+        catch (e) { document.getElementById('crawl-out').textContent = 'Invalid scrape options JSON: ' + e.message; return; }
+      }
+      if (zdr) body.zeroDataRetention = true;
       const crawlBody = document.getElementById('crawl-body');
       const bodyText = JSON.stringify(body, null, 2);
       crawlBody.value = bodyText;
@@ -1358,16 +1732,51 @@
       generateActionPlan();
     }
 
+    function toggleExtractContent() {
+      const checked = document.getElementById('extract-use-content').checked;
+      const area = document.getElementById('extract-content-area');
+      if (checked) area.classList.remove('hidden');
+      else area.classList.add('hidden');
+    }
+
+    function buildExtractRequest() {
+      const u = document.getElementById('schema-url').value.trim() || sampleUrl();
+      const instruction = document.getElementById('schema-instruction').value.trim();
+      const model = document.getElementById('extract-model').value.trim();
+      const maxRetries = parseInt(document.getElementById('extract-max-retries').value, 10);
+      const limit = parseInt(document.getElementById('extract-limit').value, 10);
+      const useContent = document.getElementById('extract-use-content').checked;
+      const content = document.getElementById('extract-content').value.trim();
+      const area = document.getElementById('extract-body');
+      let current = {};
+      try { current = JSON.parse(area.value); } catch (e) { current = {}; }
+      const body = { url: u };
+      if (useContent && content) {
+        body.content = content;
+        body.source_url = u;
+      }
+      body.instruction = instruction;
+      if (current.schema) body.schema = current.schema;
+      else body.schema = { type: 'object', properties: { title: { type: 'string' } }, required: ['title'] };
+      if (model) body.model = model;
+      if (!isNaN(maxRetries)) body.max_retries = maxRetries;
+      if (!isNaN(limit) && limit > 1) body.limit = limit;
+      area.value = JSON.stringify(body, null, 2);
+    }
+
     async function suggestInstruction() {
       const u = document.getElementById('schema-url').value.trim();
       if (!u) { alert('Enter a URL first'); return; }
       const out = document.getElementById('extract-out');
       out.textContent = 'Scraping page and suggesting instruction...';
       try {
+        const model = document.getElementById('extract-model').value.trim();
+        const payload = { url: u };
+        if (model) payload.model = model;
         const res = await fetch(url('/v1/extract/instruction-suggest'), {
           method: 'POST',
           headers: { 'Authorization': 'Bearer ' + apiKey(), 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: u })
+          body: JSON.stringify(payload)
         });
         const body = await res.json();
         if (!res.ok) {
@@ -1375,6 +1784,7 @@
           return;
         }
         document.getElementById('schema-instruction').value = body.instruction;
+        buildExtractRequest();
         out.textContent = 'Suggested instruction: ' + body.instruction;
       } catch (e) {
         out.textContent = `Error: ${e.message}`;
@@ -1384,11 +1794,7 @@
     function refreshSchemaUrl() {
       const u = sampleUrl();
       document.getElementById('schema-url').value = u;
-      const area = document.getElementById('extract-body');
-      let current = {};
-      try { current = JSON.parse(area.value); } catch (e) { current = {}; }
-      current.url = u;
-      area.value = JSON.stringify(current, null, 2);
+      buildExtractRequest();
     }
 
     async function generateSchema() {
@@ -1416,7 +1822,8 @@
         current.instruction = instruction;
         current.schema = body.schema;
         area.value = JSON.stringify(current, null, 2);
-        out.textContent = 'Schema generated and inserted into the JSON body above.';
+        buildExtractRequest();
+        out.textContent = 'Schema generated and request built.';
       } catch (e) {
         out.textContent = `Error: ${e.message}`;
       }
