@@ -1,0 +1,23 @@
+# The name displayed in the GitHub Actions tab
+name: GitHub Actions Demo
+
+# 1. Triggers: Define what events start the workflow
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+# 2. Jobs: Define the automated tasks to run
+jobs:
+  explore-github-actions:
+    # Specify the operating system environment (Runner)
+    runs-on: ubuntu-latest
+
+    # 3. Steps: The sequential tasks executed in this job
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - name: Print a message
+        run: echo "The workflow is successfully running on the runner!"
