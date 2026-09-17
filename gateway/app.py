@@ -246,6 +246,11 @@ async def ui_index():
     return _ui_response()
 
 
+@app.get("/ui/{tab}", response_class=HTMLResponse)
+async def ui_tab(tab: str):
+    return _ui_response()
+
+
 @app.post("/mcp")
 async def mcp_post(request: Request):
     body = await request.body()

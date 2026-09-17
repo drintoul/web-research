@@ -1078,7 +1078,7 @@
       const nav = document.getElementById('main-tabs');
       nav.innerHTML = mainTabs.map(t => {
         const activeClass = t.activeClass || 'tab-active';
-        return `<button id="btn-${t.id}" class="px-4 py-2 whitespace-nowrap font-medium transition ${t.id === currentTab ? activeClass : 'text-slate-700 hover:text-slate-900'}" onclick="showTab('${t.id}')">${t.label}</button>`;
+        return `<a href="/ui/${t.id}" id="btn-${t.id}" class="px-4 py-2 whitespace-nowrap font-medium transition ${t.id === currentTab ? activeClass : 'text-slate-700 hover:text-slate-900'}" onclick="event.preventDefault(); showTab('${t.id}')">${t.label}</a>`;
       }).join('');
 
       const iNav = document.getElementById('interact-tabs');
@@ -1089,13 +1089,22 @@
       }).join('');
     }
 
+    function getTabFromPath() {
+      const m = window.location.pathname.match(/^\/ui\/([^/]+)$/);
+      if (!m) return null;
+      return mainTabs.some(t => t.id === m[1]) ? m[1] : null;
+    }
+
     function showTab(id) {
       document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
-      document.getElementById('tab-' + id).classList.remove('hidden');
+      const section = document.getElementById('tab-' + id);
+      if (section) section.classList.remove('hidden');
       currentTab = id;
       buildTabs();
-      const section = document.getElementById('tab-' + id);
       if (section) section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (window.location.pathname !== '/ui/' + id) {
+        history.pushState(null, '', '/ui/' + id);
+      }
     }
 
     function showInteract(id) {
@@ -2035,7 +2044,7 @@
     setInterval(pollHealth, 5000);
 
     buildTabs();
-    showTab('search');
+    showTab(getTabFromPath() || 'search');
     buildSearchRequest();
     buildScrapeRequest();
     buildMapRequest();
