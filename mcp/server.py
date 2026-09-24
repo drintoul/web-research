@@ -67,7 +67,7 @@ class SearchOptions(TypedDict, total=False):
 
 
 class MapOptions(TypedDict, total=False):
-    search: Annotated[str, Field(description="Only return links containing this term")]
+    search: Annotated[str, Field(description="Boost/rank links relevant to this term (does NOT filter results)")]
     sitemap: Annotated[Literal["include", "skip", "only"], Field(description="How to use the sitemap")]
     includeSubdomains: Annotated[bool, Field(description="Include subdomains of the URL")]
     ignoreQueryParameters: Annotated[bool, Field(description="Ignore query parameters when deduplicating")]
