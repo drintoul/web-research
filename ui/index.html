@@ -8,7 +8,6 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     .tab-active { background-color: #2563eb; color: #ffffff; border-radius: 0.25rem; font-weight: 600; }
-    .tab-planner-active { background-color: #7c3aed; color: #ffffff; border-radius: 0.25rem; font-weight: 600; }
     .subtab-active { background-color: #2563eb; color: #ffffff; border-radius: 0.25rem; font-weight: 600; }
     pre { white-space: pre-wrap; word-break: break-word; }
     html { font-size: 110%; }
@@ -24,6 +23,11 @@
 <body class="h-full bg-slate-50 text-slate-800">
   <div class="min-h-full p-6">
     <header class="max-w-6xl mx-auto mb-6">
+      <nav class="flex gap-2 mb-3 text-sm">
+        <span class="px-3 py-1 rounded bg-blue-600 text-white font-medium">Endpoint Tester</span>
+        <a id="mcp-ui-link" href="#" class="px-3 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200">MCP &amp; Workflow &rarr;</a>
+      </nav>
+      <script>document.getElementById('mcp-ui-link').href = '/ui/mcp';</script>
       <h1 class="text-3xl font-bold mb-2">Web Research Endpoint Tester</h1>
       <p class="text-sm text-slate-600 max-w-3xl">A self-hosted web research platform with a unified set of REST and MCP endpoints for search, discovery, scraping, crawling, structured extraction, and browser interaction. This UI lets you exercise every endpoint, manage sessions, and pipe results from one call to the next.</p>
       <div class="mt-3 flex flex-wrap items-center gap-2 text-sm">
@@ -40,9 +44,15 @@
         <label class="block text-sm font-medium mb-1">API key <span class="font-normal text-slate-500">— optional; sent as Authorization: Bearer when set</span></label>
         <input id="api-key" type="password" value="" placeholder="paste your gateway key" class="w-full md:w-1/2 border rounded px-3 py-1 font-mono text-sm" />
       </div>
-      <div class="mt-3 flex flex-wrap items-center gap-3 text-sm">
-        <span class="font-medium text-slate-600">Service Status:</span>
-        <div id="health-indicators" class="flex flex-wrap items-center gap-3">
+      <div class="mt-3">
+        <p class="text-xs text-slate-400 italic">extract and interact are not part of self-hosted open-source Firecrawl — they are custom supplements added alongside it.</p>
+        <div class="mt-1 text-xs text-slate-500 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-1">
+          <span><span class="font-medium">firecrawl</span> — search, scrape, map &amp; crawl pages</span>
+          <span><span class="font-medium">extract</span> — LLM structured extraction (Ollama)</span>
+          <span><span class="font-medium">interact</span> — Playwright browser sessions</span>
+          <span><span class="font-medium">gateway</span> — routes API requests to firecrawl, extract or interact</span>
+        </div>
+        <div id="health-indicators" class="mt-1 text-xs grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-1">
           <span class="text-slate-500">Checking health...</span>
         </div>
       </div>
@@ -718,108 +728,6 @@
         <div id="interact-elements" class="hidden mt-4 p-3 bg-white border rounded text-sm"></div>
       </section>
 
-      <!-- MCP -->
-      <section id="tab-mcp" class="tab-content hidden">
-        <div class="mb-2 text-sm text-slate-500">POST <span class="font-mono">/mcp</span> (Streamable HTTP MCP)</div>
-        <div class="mb-3 p-3 bg-blue-50 border border-blue-100 rounded text-sm text-slate-700">
-          <strong>MCP call order</strong>
-          <ol class="list-decimal list-inside mt-1 space-y-1">
-            <li><strong>Initialize</strong> — send with <em>no</em> session id. The server creates a session and returns it in the <span class="font-mono">mcp-session-id</span> response header. It is auto-filled below.</li>
-            <li><strong>List tools</strong> — uses the returned session id.</li>
-            <li><strong>Call a tool</strong> — uses the same session id. The tool name and arguments go in the JSON-RPC body.</li>
-          </ol>
-        </div>
-        <div class="mb-3">
-          <label class="block text-sm font-medium mb-1">MCP session id <span id="mcp-status" class="font-normal text-slate-500">— returned by Initialize; needed for all other calls</span></label>
-          <div class="flex items-center gap-2">
-            <input id="mcp-session-id" type="text" class="border rounded px-3 py-1 flex-1 font-mono text-sm" value="" />
-            <button onclick="newMcpSession()" class="bg-slate-500 text-white px-3 py-1 rounded text-sm">Reset / New</button>
-            <button onclick="copyMcpSessionId()" class="bg-slate-500 text-white px-3 py-1 rounded text-sm">Copy</button>
-          </div>
-        </div>
-        <div class="mb-2">
-          <label class="block text-sm font-medium mb-1">JSON-RPC body <span class="font-normal text-slate-500">— editable before sending</span></label>
-          <textarea id="mcp-body" rows="10" class="w-full border rounded p-2 font-mono text-sm">{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "initialize",
-  "params": {
-    "protocolVersion": "2024-11-05",
-    "capabilities": {},
-    "clientInfo": {
-      "name": "web-research-ui",
-      "version": "0.1.0"
-    }
-  }
-}</textarea>
-        </div>
-        <div class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
-          <div>
-            <label class="block text-sm font-medium mb-1">Tool name <span class="font-normal text-slate-500">— MCP tool to call</span></label>
-            <select id="mcp-tool" class="border rounded px-2 py-1 w-full font-mono text-sm">
-              <option value="about">about</option>
-              <option value="search">search</option>
-              <option value="map_site">map_site</option>
-              <option value="scrape">scrape</option>
-              <option value="crawl">crawl</option>
-              <option value="crawl_status">crawl_status</option>
-              <option value="extract">extract</option>
-              <option value="browser_create_session">browser_create_session</option>
-              <option value="browser_navigate">browser_navigate</option>
-              <option value="browser_action">browser_action</option>
-              <option value="browser_text">browser_text</option>
-              <option value="browser_screenshot">browser_screenshot</option>
-              <option value="browser_close_session">browser_close_session</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-sm font-medium mb-1">Parameters (JSON) <span class="font-normal text-slate-500">— arguments as a JSON object</span></label>
-            <textarea id="mcp-tool-params" rows="4" class="w-full border rounded p-2 font-mono text-sm" placeholder='{ "query": "Royal Caribbean Alaska" }'></textarea>
-          </div>
-        </div>
-        <div class="mt-2 flex items-center gap-2">
-          <button onclick="buildMcpToolCall()" class="bg-emerald-600 text-white px-4 py-2 rounded">Build call</button>
-          <button onclick="sendMcp()" class="bg-blue-600 text-white px-4 py-2 rounded">Submit</button>
-          <span id="mcp-step-hint" class="text-xs text-slate-500">Step 1: send Initialize to get a session id</span>
-        </div>
-        <div class="mt-2 flex flex-wrap gap-2">
-          <button id="mcp-step-1" onclick="loadMcpStep(1)" class="text-sm px-3 py-1 rounded bg-blue-100 text-blue-700 disabled:bg-slate-200 disabled:text-slate-500 disabled:opacity-60 disabled:cursor-not-allowed transition">1. Initialize</button>
-          <button id="mcp-step-2" onclick="loadMcpStep(2)" class="text-sm px-3 py-1 rounded bg-blue-100 text-blue-700 disabled:bg-slate-200 disabled:text-slate-500 disabled:opacity-60 disabled:cursor-not-allowed transition" disabled>2. List tools</button>
-          <button id="mcp-step-3" onclick="loadMcpStep(3)" class="text-sm px-3 py-1 rounded bg-blue-100 text-blue-700 disabled:bg-slate-200 disabled:text-slate-500 disabled:opacity-60 disabled:cursor-not-allowed transition" disabled>3. Call tool</button>
-        </div>
-        <div class="mt-2 flex items-center gap-2">
-          <label class="text-sm text-slate-600 flex items-center gap-1">
-            <input type="checkbox" id="mcp-pretty" checked onchange="renderMcpOutput()" /> Pretty print JSON
-          </label>
-        </div>
-        <pre id="mcp-out" class="mt-4 p-3 bg-slate-100 rounded text-sm"></pre>
-        <div class="mt-2 flex items-center gap-2">
-          <button onclick="copyMcpResult()" class="bg-slate-500 text-white px-3 py-1 rounded text-sm">Copy response</button>
-        </div>
-      </section>
-
-      <!-- Planner -->
-      <section id="tab-planner" class="tab-content hidden">
-        <div class="mb-2 text-sm text-slate-500">Natural language → MCP plan → execution</div>
-        <div class="mb-3 p-3 bg-purple-50 border border-purple-100 rounded text-sm text-slate-700">
-          <strong>Describe a task</strong> in plain English. The gateway uses the configured LLM to generate an MCP tool call plan; you can review it and then execute it step by step.
-        </div>
-        <label class="block text-sm font-medium mb-1">Goal <span class="font-normal text-slate-500">— what the system should do</span></label>
-        <textarea id="planner-goal" rows="4" class="w-full border rounded p-2 font-mono text-sm" placeholder="Go to https://www.princess.com, find the search bar, enter 'Alaska cruises', click the Search button, wait for results, then scrape the results page."></textarea>
-        <div class="mt-2 flex items-center gap-2">
-          <button onclick="generateMcpPlan()" class="bg-purple-600 text-white px-4 py-2 rounded">Generate plan</button>
-          <button id="planner-execute" onclick="executeMcpPlan()" class="hidden bg-blue-600 text-white px-4 py-2 rounded">Execute plan</button>
-          <span class="text-xs text-slate-500">Step 1: describe the task; Step 2: review the plan; Step 3: execute it</span>
-        </div>
-        <div class="mt-2">
-          <label class="block text-sm font-medium mb-1">Planned MCP calls</label>
-          <pre id="planner-plan" class="p-3 bg-slate-100 rounded text-sm"></pre>
-        </div>
-        <div class="mt-2">
-          <label class="block text-sm font-medium mb-1">Execution results</label>
-          <pre id="planner-out" class="p-3 bg-slate-100 rounded text-sm"></pre>
-        </div>
-      </section>
     </main>
   </div>
 
@@ -841,8 +749,6 @@
       { id: 'crawl', label: 'Crawl' },
       { id: 'extract', label: 'Extract' },
       { id: 'interact', label: 'Interact' },
-      { id: 'mcp', label: 'MCP' },
-      { id: 'planner', label: 'Planner', activeClass: 'tab-planner-active' },
     ];
     const interactTabs = [
       { id: 'create', label: 'Create' },
@@ -854,8 +760,6 @@
       { id: 'close', label: 'Close' },
     ];
     let currentTab = 'search';
-    let mcpLastData = null;
-    let mcpStep = 0;
 
     function interactStepForId(id) {
       if (id === 'create') return 0;
@@ -886,194 +790,6 @@
       }
     }
 
-    let plannerPlan = null;
-
-    async function callMcpRaw(body, sid) {
-      const headers = { 'Authorization': 'Bearer ' + apiKey(), 'Content-Type': 'application/json' };
-      if (sid) headers['Mcp-Session-Id'] = sid;
-      const res = await fetch(url('/mcp'), { method: 'POST', headers, body: JSON.stringify(body) });
-      const text = await res.text();
-      const newSid = res.headers.get('mcp-session-id');
-      return { status: res.status, text, sid: newSid };
-    }
-
-    async function generateMcpPlan() {
-      const goal = document.getElementById('planner-goal').value.trim();
-      const planOut = document.getElementById('planner-plan');
-      const resultOut = document.getElementById('planner-out');
-      const btn = document.getElementById('planner-execute');
-      plannerPlan = null;
-      resultOut.textContent = '';
-      if (!goal) { planOut.textContent = 'Enter a goal first.'; btn.classList.add('hidden'); return; }
-      planOut.textContent = 'Generating plan...';
-      btn.classList.add('hidden');
-      const tools = [
-        'search(query: string, limit?: int, options?: object)',
-        'map_site(url: string, limit?: int, options?: object)',
-        'scrape(url: string, formats?: list, options?: object)',
-        'crawl(url: string, limit?: int, options?: object)',
-        'crawl_status(job_id: string)',
-        'extract(schema: object, instruction?: string, url?: string, content?: string, options?: object)',
-        'browser_create_session()',
-        'browser_navigate(session_id: string, url: string, options?: object)',
-        'browser_text(session_id: string, options?: object)',
-        'browser_screenshot(session_id: string)',
-        'browser_action(session_id: string, action: string, selector?: string, description?: string, value?: string, key?: string, allow_consequential?: bool, options?: object)',
-        'browser_close_session(session_id: string)'
-      ].join('\n');
-      const schema = {
-        type: 'object',
-        properties: {
-          plan: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                tool: { type: 'string' },
-                params: { type: 'object' },
-                reason: { type: 'string' }
-              },
-              required: ['tool', 'params']
-            }
-          }
-        },
-        required: ['plan']
-      };
-      const instruction = 'You are given a list of available MCP tools and a user goal. Return a JSON object matching the schema. The `plan` array should contain the minimal, ordered tool calls needed to fulfill the goal. Only use tools from the available list. Include a short `reason` for each step. When a value is not known until a previous step runs, use exactly one of these placeholders: `{{session_id}}` (from `browser_create_session`), `{{current_url}}` (the page URL from `browser_navigate`, `browser_text`, `browser_screenshot`, or `browser_action`), `{{search_results[0].url}}` (the first result URL from `search`), `{{page_text}}` (the text from the last `browser_text`), `{{extract.<key>}}` (a top-level key from the last `extract` result), or `{{map_results[0]}}` (the first URL from the last `map_site` result). For clicking elements whose CSS selector is unknown, use `description` (e.g., "first news story link") instead of `selector`. For `extract`, `schema` must be a valid JSON Schema, e.g. `{"type":"object","properties":{"location":{"type":"string"},"date":{"type":"string"}},"required":["location","date"]}`. If the source is JS-rendered or a previous `extract` returned empty/null, first call `browser_text` and then `extract` with `content: "{{page_text}}"`. To discover an internal page without hard-coding the URL, use `map_site` with `limit` of at least 50, then use `extract` with `content: "{{map_results}}"` to identify the desired page URL (e.g., `advisor_directory_url`), and then `browser_navigate` to `{{extract.advisor_directory_url}}`. Do not assume `{{map_results[0]}}` is the target page. Do not use other placeholder syntax.';
-      const payload = {
-        content: `Available MCP tools (each takes an options object for extra parameters):\n${tools}\n\nUser goal: ${goal}`,
-        instruction,
-        schema,
-        max_retries: 2
-      };
-      try {
-        const res = await fetch(url('/v1/extract'), {
-          method: 'POST',
-          headers: { 'Authorization': 'Bearer ' + apiKey(), 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        const j = await res.json();
-        if (!res.ok || j.error || !j.data) {
-          planOut.textContent = `HTTP ${res.status}\n\n${JSON.stringify(j, null, 2)}`;
-          return;
-        }
-        const data = (j.data && j.data.plan) ? j.data.plan : (Array.isArray(j.data) ? j.data : null);
-        if (!Array.isArray(data)) {
-          planOut.textContent = 'No plan returned.\n\n' + JSON.stringify(j, null, 2);
-          return;
-        }
-        plannerPlan = data;
-        planOut.textContent = JSON.stringify(data, null, 2);
-        btn.classList.remove('hidden');
-      } catch (e) {
-        planOut.textContent = `Error: ${e.message}`;
-      }
-    }
-
-    function extractMcpResult(text) {
-      const lines = text.split(/\r?\n/);
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          try { return JSON.parse(line.slice(6)); } catch (_) {}
-        }
-      }
-      try { return JSON.parse(text); } catch (_) {}
-      return null;
-    }
-
-    function updateMcpContext(ctx, data) {
-      if (!data || !data.result) return;
-      let source = null;
-      if (data.result.structuredContent && typeof data.result.structuredContent === 'object') {
-        source = data.result.structuredContent;
-      } else if (Array.isArray(data.result.content)) {
-        for (const c of data.result.content) {
-          if (c.type === 'text' && typeof c.text === 'string') {
-            try { source = JSON.parse(c.text); break; } catch (_) {}
-          }
-        }
-      }
-      if (!source) return;
-      if (source.session_id) ctx.session_id = source.session_id;
-      if (source.url) ctx.current_url = source.url;
-      if (source.text) ctx.page_text = source.text;
-      if (source.data) ctx.last_extract = source.data;
-      if (Array.isArray(source.links)) ctx.map_results = source.links;
-      if (source.success && source.data && Array.isArray(source.data.web)) {
-        ctx.search_results = source.data.web;
-      }
-    }
-
-    function getByPath(obj, expr) {
-      const tokens = expr.match(/(?:[A-Za-z_$][\w$]*)|\[\s*(?:\d+|"[^"]*"|'[^']*')\s*\]|\.[A-Za-z_$][\w$]*/g) || [];
-      let current = obj;
-      for (const token of tokens) {
-        if (!token) continue;
-        if (token.startsWith('.')) {
-          current = current?.[token.slice(1)];
-        } else if (token.startsWith('[')) {
-          const inner = token.slice(1, -1).trim();
-          if (inner.startsWith('"') || inner.startsWith("'")) current = current?.[inner.slice(1, -1)];
-          else current = current?.[Number(inner)];
-        } else {
-          current = current?.[token];
-        }
-      }
-      return current;
-    }
-
-    function subPlaceholders(value, ctx) {
-      if (typeof value === 'string') {
-        return value.replace(/<([^>]+)>|{{([^}]+)}}/g, (_, a, b) => {
-          const expr = (a || b).trim();
-          const resolved = expr.startsWith('extract.') ? getByPath(ctx.last_extract, expr.slice(8)) : getByPath(ctx, expr);
-          if (resolved === undefined || resolved === null) return _;
-          if (typeof resolved === 'string' || typeof resolved === 'number' || typeof resolved === 'boolean') return resolved;
-          return JSON.stringify(resolved);
-        });
-      }
-      if (Array.isArray(value)) return value.map(v => subPlaceholders(v, ctx));
-      if (value && typeof value === 'object') {
-        const out = {};
-        for (const [k, v] of Object.entries(value)) out[k] = subPlaceholders(v, ctx);
-        return out;
-      }
-      return value;
-    }
-
-    async function executeMcpPlan() {
-      const out = document.getElementById('planner-out');
-      if (!plannerPlan || !plannerPlan.length) { out.textContent = 'No plan to execute. Generate a plan first.'; return; }
-      out.textContent = 'Initializing MCP session...';
-      try {
-        const init = await callMcpRaw({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'web-research-ui-planner', version: '0.1.0' } } });
-        if (init.status !== 200) { out.textContent = `Initialize failed (HTTP ${init.status}):\n\n${init.text}`; return; }
-        const sid = init.sid;
-        const context = { session_id: null, current_url: null, page_text: null, last_extract: null, map_results: null };
-        let output = `Initialize: HTTP ${init.status}\nMcp-Session-Id: ${sid || '(none)'}`;
-        for (let i = 0; i < plannerPlan.length; i++) {
-          const step = plannerPlan[i];
-          const args = subPlaceholders(step.params || {}, context);
-          delete args.reason;
-          if (step.tool === 'extract' && typeof args.schema === 'string') {
-            try { args.schema = JSON.parse(args.schema); } catch (_) {}
-          }
-          const stepBody = {
-            jsonrpc: '2.0',
-            id: i + 2,
-            method: 'tools/call',
-            params: { name: step.tool, arguments: args }
-          };
-          const r = await callMcpRaw(stepBody, sid);
-          updateMcpContext(context, extractMcpResult(r.text));
-          output += `\n\nStep ${i + 1}: ${step.tool}\nHTTP ${r.status}\n${formatMcpOutput(r.text, true)}`;
-          out.textContent = output;
-        }
-      } catch (e) {
-        out.textContent = `Error: ${e.message}`;
-      }
-    }
-
     function buildTabs() {
       const nav = document.getElementById('main-tabs');
       nav.innerHTML = mainTabs.map(t => {
@@ -1095,13 +811,20 @@
       return mainTabs.some(t => t.id === m[1]) ? m[1] : null;
     }
 
-    function showTab(id) {
+    const TAB_BUILDERS = { scrape: buildScrapeRequest, map: buildMapRequest, crawl: buildCrawlRequest, search: buildSearchRequest, extract: buildExtractRequest };
+
+    function showTab(id, scroll = true) {
       document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
       const section = document.getElementById('tab-' + id);
       if (section) section.classList.remove('hidden');
       currentTab = id;
       buildTabs();
-      if (section) section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const bodyEl = document.getElementById(id + '-body');
+      const builder = TAB_BUILDERS[id];
+      if (builder && bodyEl && !bodyEl.value.trim()) {
+        try { builder(); } catch (e) { /* leave body empty if build fails */ }
+      }
+      if (scroll && section) section.scrollIntoView({ behavior: 'smooth', block: 'start' });
       if (window.location.pathname !== '/ui/' + id) {
         history.pushState(null, '', '/ui/' + id);
       }
@@ -1872,185 +1595,30 @@
         }
         const data = await res.json();
         const services = data.services || {};
-        const displayNames = { extract: 'Extract/LLM', interact: 'Interact/Playwright', firecrawl: 'Firecrawl', gateway: 'Gateway' };
-        const html = Object.entries(services).map(([name, ok]) => {
-          const color = ok ? 'bg-emerald-500' : 'bg-red-500';
-          const display = displayNames[name] || name;
-          return `<span class="flex items-center gap-1" title="${display}: ${ok ? 'ok' : 'down'}"><span class="inline-block w-2 h-2 rounded-full ${color}"></span><span>${display}</span></span>`;
+        const order = ['firecrawl', 'extract', 'interact', 'gateway'];
+        const names = order.filter(n => n in services).concat(Object.keys(services).filter(n => !order.includes(n)));
+        const html = names.map(name => {
+          const ok = services[name] === true || (services[name] && services[name].status === 'ok');
+          const label = services[name] === true ? 'ok' : (services[name] && services[name].status ? services[name].status : 'down');
+          const card = ok ? 'border-emerald-200 bg-emerald-50' : 'border-red-200 bg-red-50';
+          const dot = ok ? 'bg-emerald-500' : 'bg-red-500';
+          const nameCls = ok ? 'text-slate-700' : 'text-red-600';
+          const statusCls = ok ? 'text-emerald-600' : 'text-red-500';
+          return `<span class="flex items-center gap-2 px-3 py-1.5 rounded-md border ${card}" title="${name}: ${label}"><span class="inline-block w-2 h-2 rounded-full flex-shrink-0 ${dot}"></span><span class="font-medium ${nameCls}">${name}</span><span class="ml-auto text-[11px] font-medium ${statusCls}">${label}</span></span>`;
         }).join('');
         container.innerHTML = html || '<span class="text-slate-500">No services</span>';
       } catch (e) {
         container.innerHTML = '<span class="text-red-600">Health check failed</span>';
       }
     }
-    function updateMcpStatus() {
-      const sid = document.getElementById('mcp-session-id').value;
-      const status = document.getElementById('mcp-status');
-      if (sid) {
-        status.textContent = '— session set; ready for List tools / Call tool';
-        status.className = 'font-normal text-emerald-600';
-        document.getElementById('mcp-step-hint').textContent = 'Step 2 or 3: load a step and click Send';
-      } else {
-        status.textContent = '— not set; run Initialize first';
-        status.className = 'font-normal text-slate-500';
-        document.getElementById('mcp-step-hint').textContent = 'Step 1: send Initialize to get a session id';
-      }
-    }
-
-    function updateMcpButtons() {
-      const btn2 = document.getElementById('mcp-step-2');
-      const btn3 = document.getElementById('mcp-step-3');
-      const btn4 = document.getElementById('mcp-step-4');
-      if (btn2) btn2.disabled = mcpStep < 1;
-      if (btn3) btn3.disabled = mcpStep < 2;
-      if (btn4) btn4.disabled = mcpStep < 2;
-    }
-
-    function mcpLastJson() {
-      if (!mcpLastData) return null;
-      const m = mcpLastData.text.match(/data: (.*)/s);
-      if (m) {
-        try { return JSON.parse(m[1]); } catch (_) {}
-      }
-      try { return JSON.parse(mcpLastData.text); } catch (_) {}
-      return null;
-    }
-
-    const MCP_STEPS = {
-      1: { id: 1, method: 'initialize', body: { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'web-research-ui', version: '0.1.0' } } }, hint: 'Step 1: send Initialize (no session id needed)' },
-      2: { id: 2, method: 'tools/list', body: { jsonrpc: '2.0', id: 2, method: 'tools/list' }, hint: 'Step 2: send List tools with the session id' },
-      3: { id: 3, method: 'tools/call', body: { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: '', arguments: {} } }, hint: 'Step 3: choose a tool, enter parameters, Build call, then Send' }
-    };
-
-    function loadMcpStep(step) {
-      const s = MCP_STEPS[step];
-      if (!s) return;
-      document.getElementById('mcp-body').value = JSON.stringify(s.body, null, 2);
-      document.getElementById('mcp-step-hint').textContent = s.hint;
-      if (step === 1) {
-        document.getElementById('mcp-session-id').value = '';
-        mcpStep = 0;
-        mcpLastData = null;
-        renderMcpOutput();
-        updateMcpButtons();
-      }
-      updateMcpStatus();
-    }
-
-    function formatMcpOutput(text, pretty) {
-      if (text.includes('data: ')) {
-        return text.split(/\r?\n/).map(line => {
-          if (line.startsWith('data: ')) {
-            const p = line.slice(6);
-            try { const j = JSON.parse(p); return 'data: ' + JSON.stringify(j, null, pretty ? 2 : null); }
-            catch (_) { return line; }
-          }
-          return line;
-        }).join('\n');
-      }
-      try { const j = JSON.parse(text); return JSON.stringify(j, null, pretty ? 2 : null); }
-      catch (_) { return text; }
-    }
-
-    function renderMcpOutput() {
-      const out = document.getElementById('mcp-out');
-      if (!mcpLastData) { out.textContent = ''; return; }
-      const pretty = document.getElementById('mcp-pretty')?.checked ?? true;
-      out.textContent = mcpLastData.status + formatMcpOutput(mcpLastData.text, pretty);
-    }
-
-    function buildMcpToolCall() {
-      const name = document.getElementById('mcp-tool').value;
-      const raw = document.getElementById('mcp-tool-params').value.trim();
-      let args = {};
-      if (raw) {
-        try { args = JSON.parse(raw); }
-        catch (e) { document.getElementById('mcp-out').textContent = 'Invalid parameters JSON: ' + e.message; return; }
-      }
-      const body = { jsonrpc: '2.0', id: Date.now(), method: 'tools/call', params: { name, arguments: args } };
-      const mcpBody = document.getElementById('mcp-body');
-      const mcpBodyText = JSON.stringify(body, null, 2);
-      mcpBody.value = mcpBodyText;
-      mcpBody.rows = Math.max(6, mcpBodyText.split('\n').length);
-      document.getElementById('mcp-step-hint').textContent = 'Step 3: review the JSON-RPC body and click Send';
-    }
-
-    async function sendMcp() {
-      const body = document.getElementById('mcp-body').value;
-      const out = document.getElementById('mcp-out');
-      const sidInput = document.getElementById('mcp-session-id');
-      let method = '';
-      try { method = JSON.parse(body).method || ''; } catch (_) {}
-      const isInit = method === 'initialize';
-      const headers = {
-        'Authorization': 'Bearer ' + apiKey(),
-        'Content-Type': 'application/json'
-      };
-      if (!isInit) {
-        const sid = sidInput.value.trim();
-        if (!sid) { out.textContent = 'Run Step 1 (Initialize) to get an MCP session id.'; return; }
-        headers['Mcp-Session-Id'] = sid;
-      }
-      out.textContent = 'Sending...';
-      mcpLastData = null;
-      try {
-        const res = await fetch(url('/mcp'), {
-          method: 'POST',
-          headers: headers,
-          body: body
-        });
-        const text = await res.text();
-        const returnedSid = res.headers.get('mcp-session-id') || '(none)';
-        mcpLastData = { status: `HTTP ${res.status}\nMcp-Session-Id: ${returnedSid}\n\n`, text };
-        renderMcpOutput();
-        const j = mcpLastJson();
-        if (j && !j.error) {
-          if (method === 'initialize') mcpStep = Math.max(mcpStep, 1);
-          else if (method === 'tools/list') mcpStep = Math.max(mcpStep, 2);
-          else if (method === 'tools/call') mcpStep = Math.max(mcpStep, 3);
-          updateMcpButtons();
-        }
-        if (isInit && returnedSid !== '(none)') {
-          sidInput.value = returnedSid;
-        }
-      } catch (e) {
-        out.textContent = `Error: ${e.message}`;
-      }
-      updateMcpStatus();
-    }
-
-    function copyMcpResult() {
-      const text = document.getElementById('mcp-out').textContent;
-      if (!text) return;
-      navigator.clipboard.writeText(text);
-    }
-
-    function copyMcpSessionId() {
-      const sid = document.getElementById('mcp-session-id').value;
-      if (sid) {
-        navigator.clipboard.writeText(sid);
-      } else {
-        document.getElementById('mcp-out').textContent += '\n\n[No MCP session id to copy]';
-      }
-    }
-
-    function newMcpSession() {
-      mcpStep = 0;
-      mcpLastData = null;
-      loadMcpStep(1);
-      updateMcpButtons();
-    }
-
     setInterval(pollHealth, 5000);
 
     buildTabs();
-    showTab(getTabFromPath() || 'search');
+    showTab(getTabFromPath() || 'search', false);
     buildSearchRequest();
     buildScrapeRequest();
     buildMapRequest();
     showInteract('create');
-    updateMcpStatus();
-    updateMcpButtons();
     updateInteractStatus();
     updateInteractButtons();
     pollHealth();

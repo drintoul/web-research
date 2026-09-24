@@ -3,7 +3,7 @@ from typing import Any
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request, Response
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, Field, model_validator
 
 from common.http import OptionalApiKeyMiddleware, RequestContextMiddleware
@@ -215,6 +215,7 @@ async def extract_instruction_suggest(payload: dict[str, Any], request: Request)
 
 
 _UI_HTML: str | None = None
+_MCP_UI_HTML: str | None = None
 
 
 def _get_ui_html() -> str:
@@ -230,6 +231,16 @@ def _get_ui_html() -> str:
             )
         _UI_HTML = html
     return _UI_HTML
+
+
+def _get_mcp_ui_html() -> str:
+    global _MCP_UI_HTML
+    if _MCP_UI_HTML is None:
+        ui_path = os.path.join(os.path.dirname(__file__), "..", "mcp_ui", "index.html")
+        with open(ui_path, "r") as f:
+            html = f.read()
+        _MCP_UI_HTML = html.replace("__GATEWAY_API_KEY__", os.getenv("GATEWAY_API_KEY", "").strip())
+    return _MCP_UI_HTML
 
 
 def _ui_response() -> HTMLResponse:
@@ -248,6 +259,8 @@ async def ui_index():
 
 @app.get("/ui/{tab}", response_class=HTMLResponse)
 async def ui_tab(tab: str):
+    if tab == "mcp":
+        return HTMLResponse(_get_mcp_ui_html())
     return _ui_response()
 
 

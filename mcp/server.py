@@ -1,9 +1,10 @@
 import base64
 import os
-from typing import Any
+from typing import Annotated, Any, Literal, TypedDict
 
 import httpx
 from fastmcp import FastMCP
+from pydantic import Field
 
 GATEWAY = os.getenv("GATEWAY_BASE_URL", "http://gateway:8080").rstrip("/")
 API_KEY = os.getenv("GATEWAY_API_KEY", "")
@@ -29,6 +30,88 @@ async def _get(path: str, params: dict[str, Any] | None = None) -> Any:
         return r.json()
 
 
+ScrapeFormat = Literal[
+    "markdown", "html", "rawHtml", "links", "images", "screenshot",
+    "summary", "json", "changeTracking", "attributes", "branding",
+]
+
+
+class ScrapeOptions(TypedDict, total=False):
+    onlyMainContent: Annotated[bool, Field(description="Return only the main content, excluding headers/footers/nav")]
+    waitFor: Annotated[int, Field(description="Milliseconds to wait for the page to load before scraping")]
+    includeTags: Annotated[list[str], Field(description="HTML tags to include, e.g. [\"article\", \"p\"]")]
+    excludeTags: Annotated[list[str], Field(description="HTML tags to exclude, e.g. [\"nav\", \"footer\"]")]
+    mobile: Annotated[bool, Field(description="Emulate a mobile device")]
+    skipTlsVerification: Annotated[bool, Field(description="Skip TLS certificate verification")]
+    timeout: Annotated[int, Field(description="Request timeout in milliseconds")]
+    removeBase64Images: Annotated[bool, Field(description="Remove base64-encoded images from output")]
+    blockAds: Annotated[bool, Field(description="Block ads and trackers")]
+    proxy: Annotated[Literal["basic", "stealth", "auto"], Field(description="Proxy type for anti-bot protected sites")]
+    maxAge: Annotated[int, Field(description="Max age in ms of a cached page to reuse")]
+    storeInCache: Annotated[bool, Field(description="Store the result in the page cache")]
+    headers: Annotated[dict[str, str], Field(description="Extra HTTP headers, e.g. {\"Cookie\": \"...\"}")]
+    actions: Annotated[list[dict[str, Any]], Field(description="Browser actions before scraping, e.g. [{\"type\": \"wait\", \"milliseconds\": 1000}, {\"type\": \"click\", \"selector\": \"#accept\"}]")]
+    location: Annotated[dict[str, Any], Field(description="Geo location, e.g. {\"country\": \"US\", \"languages\": [\"en-US\"]}")]
+    parsers: Annotated[list[str], Field(description="Document parsers, e.g. [\"pdf\"]")]
+
+
+class SearchOptions(TypedDict, total=False):
+    sources: Annotated[list[Literal["web", "images", "news"]], Field(description="Result sources")]
+    categories: Annotated[list[str], Field(description="Categories, e.g. [\"github\", \"research\"]")]
+    tbs: Annotated[str, Field(description="Time filter: qdr:h (hour), qdr:d (day), qdr:w (week), qdr:m (month), qdr:y (year)")]
+    location: Annotated[str, Field(description="Location name, e.g. \"Germany\"")]
+    country: Annotated[str, Field(description="ISO country code, e.g. \"US\"")]
+    timeout: Annotated[int, Field(description="Request timeout in milliseconds")]
+    ignoreInvalidURLs: Annotated[bool, Field(description="Ignore invalid URLs in results")]
+    scrapeOptions: Annotated[ScrapeOptions, Field(description="Scrape each result with these options")]
+
+
+class MapOptions(TypedDict, total=False):
+    search: Annotated[str, Field(description="Only return links containing this term")]
+    sitemap: Annotated[Literal["include", "skip", "only"], Field(description="How to use the sitemap")]
+    includeSubdomains: Annotated[bool, Field(description="Include subdomains of the URL")]
+    ignoreQueryParameters: Annotated[bool, Field(description="Ignore query parameters when deduplicating")]
+    ignoreCache: Annotated[bool, Field(description="Ignore the cached sitemap")]
+    allowExternalLinks: Annotated[bool, Field(description="Allow links to external domains")]
+    allowBackwardLinks: Annotated[bool, Field(description="Allow links to parent/sibling paths")]
+    timeout: Annotated[int, Field(description="Request timeout in milliseconds")]
+    location: Annotated[dict[str, Any], Field(description="Geo location, e.g. {\"country\": \"US\"}")]
+
+
+class CrawlOptions(TypedDict, total=False):
+    includePaths: Annotated[list[str], Field(description="Regex paths to include, e.g. [\"^/blog/\"]")]
+    excludePaths: Annotated[list[str], Field(description="Regex paths to exclude")]
+    maxDiscoveryDepth: Annotated[int, Field(description="Max link-discovery depth")]
+    allowBackwardLinks: Annotated[bool, Field(description="Crawl parent/sibling paths")]
+    allowExternalLinks: Annotated[bool, Field(description="Crawl external domains")]
+    ignoreSitemap: Annotated[bool, Field(description="Ignore the sitemap when discovering pages")]
+    ignoreQueryParameters: Annotated[bool, Field(description="Ignore query parameters when deduplicating")]
+    deduplicateSimilarURLs: Annotated[bool, Field(description="Deduplicate similar URLs")]
+    delay: Annotated[int, Field(description="Delay in seconds between page scrapes")]
+    maxConcurrency: Annotated[int, Field(description="Max concurrent scrapes")]
+    webhook: Annotated[dict[str, Any], Field(description="Webhook config, e.g. {\"url\": \"https://...\", \"events\": [\"completed\"]}")]
+    scrapeOptions: Annotated[ScrapeOptions, Field(description="Scrape options applied to each page")]
+
+
+class ExtractOptions(TypedDict, total=False):
+    model: Annotated[str, Field(description="Ollama model override")]
+    max_retries: Annotated[int, Field(description="Max LLM retries on invalid JSON")]
+    limit: Annotated[int, Field(description="Max items to return")]
+
+
+class BrowserNavigateOptions(TypedDict, total=False):
+    wait_until: Annotated[Literal["commit", "domcontentloaded", "load", "networkidle"], Field(description="When to consider navigation complete")]
+
+
+class BrowserActionOptions(TypedDict, total=False):
+    timeout_ms: Annotated[int, Field(description="Element wait timeout in ms (100-60000)")]
+
+
+class BrowserTextOptions(TypedDict, total=False):
+    wait_ms: Annotated[int, Field(description="Wait time in ms before reading text (0-30000)")]
+    scroll: Annotated[bool, Field(description="Scroll to the bottom of the page first")]
+
+
 @mcp.tool
 def about() -> str:
     """Describe the capabilities of this self-hosted web research."""
@@ -36,7 +119,11 @@ def about() -> str:
 
 
 @mcp.tool
-async def search(query: str, limit: int = 10, options: dict[str, Any] | None = None) -> Any:
+async def search(
+    query: Annotated[str, Field(description="Search query text")],
+    limit: Annotated[int, Field(description="Max number of results")] = 10,
+    options: Annotated[SearchOptions | None, Field(description="Additional search options")] = None,
+) -> Any:
     """Search the web through the self-hosted Firecrawl search endpoint."""
     payload = {"query": query, "limit": limit}
     if options:
@@ -45,7 +132,11 @@ async def search(query: str, limit: int = 10, options: dict[str, Any] | None = N
 
 
 @mcp.tool
-async def map_site(url: str, limit: int = 100, options: dict[str, Any] | None = None) -> Any:
+async def map_site(
+    url: Annotated[str, Field(description="Website URL to map")],
+    limit: Annotated[int, Field(description="Max number of URLs to return")] = 100,
+    options: Annotated[MapOptions | None, Field(description="Additional map options")] = None,
+) -> Any:
     """Map discoverable URLs on a website."""
     payload = {"url": url, "limit": limit}
     if options:
@@ -54,7 +145,11 @@ async def map_site(url: str, limit: int = 100, options: dict[str, Any] | None = 
 
 
 @mcp.tool
-async def scrape(url: str, formats: list[str] | None = None, options: dict[str, Any] | None = None) -> Any:
+async def scrape(
+    url: Annotated[str, Field(description="URL of the page to scrape")],
+    formats: Annotated[list[ScrapeFormat] | None, Field(description="Output formats")] = None,
+    options: Annotated[ScrapeOptions | None, Field(description="Additional scrape options")] = None,
+) -> Any:
     """Scrape a URL and return LLM-friendly content."""
     payload = {"url": url, "formats": formats or ["markdown"]}
     if options:
@@ -63,7 +158,11 @@ async def scrape(url: str, formats: list[str] | None = None, options: dict[str, 
 
 
 @mcp.tool
-async def crawl(url: str, limit: int = 100, options: dict[str, Any] | None = None) -> Any:
+async def crawl(
+    url: Annotated[str, Field(description="Starting URL to crawl")],
+    limit: Annotated[int, Field(description="Max pages to crawl")] = 100,
+    options: Annotated[CrawlOptions | None, Field(description="Additional crawl options")] = None,
+) -> Any:
     """Start a crawl job."""
     payload = {"url": url, "limit": limit}
     if options:
@@ -72,13 +171,21 @@ async def crawl(url: str, limit: int = 100, options: dict[str, Any] | None = Non
 
 
 @mcp.tool
-async def crawl_status(job_id: str) -> Any:
+async def crawl_status(
+    job_id: Annotated[str, Field(description="Crawl job id returned by crawl")],
+) -> Any:
     """Get the status/results of a crawl job."""
     return await _get(f"/v1/crawl/{job_id}")
 
 
 @mcp.tool
-async def extract(schema: dict[str, Any], instruction: str = "Extract the requested fields.", url: str | None = None, content: str | None = None, options: dict[str, Any] | None = None) -> Any:
+async def extract(
+    schema: Annotated[dict[str, Any], Field(description="JSON Schema describing the fields to extract")],
+    instruction: Annotated[str, Field(description="Extraction instruction for the LLM")] = "Extract the requested fields.",
+    url: Annotated[str | None, Field(description="URL to scrape, then extract from")] = None,
+    content: Annotated[str | None, Field(description="Raw content to extract from instead of a URL")] = None,
+    options: Annotated[ExtractOptions | None, Field(description="Additional extract options")] = None,
+) -> Any:
     """Extract structured JSON from a URL or from supplied content using the provided JSON Schema."""
     payload: dict[str, Any] = {"schema": schema, "instruction": instruction}
     if url:
@@ -97,7 +204,11 @@ async def browser_create_session() -> Any:
 
 
 @mcp.tool
-async def browser_navigate(session_id: str, url: str, options: dict[str, Any] | None = None) -> Any:
+async def browser_navigate(
+    session_id: Annotated[str, Field(description="Session id from browser_create_session")],
+    url: Annotated[str, Field(description="Public HTTP(S) URL to navigate to")],
+    options: Annotated[BrowserNavigateOptions | None, Field(description="Additional navigate options")] = None,
+) -> Any:
     """Navigate a browser session to a public HTTP(S) URL. Private/internal destinations are blocked."""
     payload = {"url": url}
     if options:
@@ -107,14 +218,14 @@ async def browser_navigate(session_id: str, url: str, options: dict[str, Any] | 
 
 @mcp.tool
 async def browser_action(
-    session_id: str,
-    action: str,
-    selector: str | None = None,
-    description: str | None = None,
-    value: str | None = None,
-    key: str | None = None,
-    allow_consequential: bool = False,
-    options: dict[str, Any] | None = None,
+    session_id: Annotated[str, Field(description="Session id from browser_create_session")],
+    action: Annotated[Literal["click", "type", "press", "select"], Field(description="Action type")],
+    selector: Annotated[str | None, Field(description="CSS selector of the target element")] = None,
+    description: Annotated[str | None, Field(description="Natural-language description of the element (used when no selector)")] = None,
+    value: Annotated[str | None, Field(description="Text to type, or option to select")] = None,
+    key: Annotated[str | None, Field(description="Key for press, e.g. \"Enter\"")] = None,
+    allow_consequential: Annotated[bool, Field(description="Approve potentially consequential clicks")] = False,
+    options: Annotated[BrowserActionOptions | None, Field(description="Additional action options")] = None,
 ) -> Any:
     """Perform a browser action. Consequential clicks are blocked unless explicitly approved."""
     payload = {
@@ -131,14 +242,19 @@ async def browser_action(
 
 
 @mcp.tool
-async def browser_text(session_id: str, options: dict[str, Any] | None = None) -> Any:
+async def browser_text(
+    session_id: Annotated[str, Field(description="Session id from browser_create_session")],
+    options: Annotated[BrowserTextOptions | None, Field(description="wait_ms / scroll options")] = None,
+) -> Any:
     """Read visible page text from a browser session. Options: wait_ms (int), scroll (bool)."""
     params = {k: v for k, v in (options or {}).items() if k in ("wait_ms", "scroll")}
     return await _get(f"/v1/interact/sessions/{session_id}/text", params)
 
 
 @mcp.tool
-async def browser_screenshot(session_id: str) -> dict[str, str]:
+async def browser_screenshot(
+    session_id: Annotated[str, Field(description="Session id from browser_create_session")],
+) -> dict[str, str]:
     """Capture a full-page PNG screenshot as base64."""
     async with httpx.AsyncClient(timeout=180) as client:
         r = await client.get(f"{GATEWAY}/v1/interact/sessions/{session_id}/screenshot", headers=_headers())
@@ -147,7 +263,9 @@ async def browser_screenshot(session_id: str) -> dict[str, str]:
 
 
 @mcp.tool
-async def browser_close_session(session_id: str) -> Any:
+async def browser_close_session(
+    session_id: Annotated[str, Field(description="Session id from browser_create_session")],
+) -> Any:
     """Close and destroy a browser session."""
     async with httpx.AsyncClient(timeout=60) as client:
         r = await client.delete(f"{GATEWAY}/v1/interact/sessions/{session_id}", headers=_headers())

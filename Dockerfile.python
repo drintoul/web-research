@@ -11,6 +11,7 @@ COPY common /app/common
 COPY gateway /app/gateway
 COPY extract /app/extract
 COPY mcp /app/mcp_server
+COPY mcp_ui /app/mcp_ui
 COPY interact/__init__.py /app/interact/__init__.py
 COPY interact/security.py /app/interact/security.py
 COPY tests /app/tests

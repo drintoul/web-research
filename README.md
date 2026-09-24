@@ -36,6 +36,10 @@ component to do everything:
 
   Test UI                             Served by the gateway at `/ui` for
                                       manually exercising the platform
+
+  MCP Console UI                      Served by the gateway at
+                                      `/ui/mcp` for running MCP tools and
+                                      building / executing workflows
   -----------------------------------------------------------------------
 
 > **Important:** this Compose project does **not** start Ollama or
@@ -176,6 +180,9 @@ web-research/
 │   └── security.py
 ├── mcp/
 │   └── server.py
+├── mcp_ui/
+│   ├── app.py
+│   └── index.html
 ├── ui/
 │   └── index.html
 ├── scripts/
@@ -361,25 +368,43 @@ REST API:    http://127.0.0.1:8080
 OpenAPI UI:  http://127.0.0.1:8080/docs
 MCP server:  http://127.0.0.1:8081/mcp
 Web UI:      http://127.0.0.1:8080/ui
+MCP Console: http://127.0.0.1:8080/ui/mcp
 ```
 
 The published interfaces bind to loopback by default.
 
 # Web UI
 
-The built-in UI is intended for development, testing, and manually
-exercising the Web Research endpoints. It does not replace the REST or
-MCP interfaces.
+Two browser UIs are included for development, testing, and manually
+exercising the platform. They do not replace the REST or MCP
+interfaces, and they link to each other via the nav tabs at the top of
+each page.
 
-Open:
+## Endpoint Tester
+
+Served by the gateway at `/ui`. It provides a tab per endpoint (Search,
+Map, Scrape, Crawl, Extract, Interact) with schema-driven parameter
+controls, a built JSON body you can edit, and a submit step.
 
 ``` text
 http://127.0.0.1:8080/ui
 ```
 
+## MCP Console
+
+Served by the gateway at `/ui/mcp`. It connects to the MCP
+server, lists the available tools, renders each tool's parameters from
+its input schema, and lets you run a tool once or assemble a multi-step
+workflow (with `{{lastData.*}}` placeholders between steps) and execute
+or export it as JSON.
+
+``` text
+http://127.0.0.1:8080/ui/mcp
+```
+
 When authentication is enabled, supply the configured gateway API key in
-the UI. The UI should send the credential with API requests; the server
-does not need to embed the secret into the page.
+the Endpoint Tester. The MCP Console injects the key server-side for its
+proxied requests, so it does not need to embed the secret into the page.
 
 ## UI screenshots
 
@@ -1181,7 +1206,7 @@ mandatory at the gateway and/or a trusted reverse-proxy boundary.
 By default:
 
 ``` text
-127.0.0.1:8080 -> REST gateway / Web UI
+127.0.0.1:8080 -> REST gateway / Web UI / MCP Console UI
 127.0.0.1:8081 -> MCP server
 ```
 
@@ -1590,9 +1615,10 @@ flowchart TD
 Call it through:
 
 ``` text
-REST  -> http://127.0.0.1:8080
-MCP   -> http://127.0.0.1:8081/mcp
-UI    -> http://127.0.0.1:8080/ui
+REST   -> http://127.0.0.1:8080
+MCP    -> http://127.0.0.1:8081/mcp
+UI     -> http://127.0.0.1:8080/ui
+MCP UI -> http://127.0.0.1:8080/ui/mcp
 ```
 
 The key architectural boundary is simple:

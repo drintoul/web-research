@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Web Research MCP Console</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48Y2lyY2xlIGN4PSI0MiIgY3k9IjQyIiByPSIyOCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMjU2M2ViIiBzdHJva2Utd2lkdGg9IjEwIi8+PGxpbmUgeDE9IjYyIiB5MT0iNjIiIHgyPSI5MCIgeTI9IjkwIiBzdHJva2U9IiMyNTYzZWIiIHN0cm9rZS13aWR0aD0iMTAiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjwvc3ZnPg==" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    pre { white-space: pre-wrap; word-break: break-word; }
+    html { font-size: 110%; }
+    details > summary { list-style: none; }
+    details > summary::-webkit-details-marker { display: none; }
+    textarea { resize: vertical; }
+    input, select, textarea { background-color: #f8fafc; }
+  </style>
+  <script>
+    // The gateway API key is injected server-side by the gateway when it serves this page.
+    const GATEWAY_API_KEY = '__GATEWAY_API_KEY__';
+  </script>
+</head>
+<body class="bg-slate-50 text-slate-900">
+  <header class="bg-white border-b border-slate-200">
+    <div class="max-w-6xl mx-auto px-4 py-4">
+      <nav class="flex gap-2 mb-3 text-sm">
+        <a id="main-ui-link" href="#" class="px-3 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200">&larr; Endpoint Tester</a>
+        <span class="px-3 py-1 rounded bg-blue-600 text-white font-medium">MCP &amp; Workflow</span>
+      </nav>
+      <script>document.getElementById('main-ui-link').href = '/ui';</script>
+      <h1 class="text-3xl font-bold mb-2">Web Research MCP Console</h1>
+      <p class="text-sm text-slate-600 max-w-3xl">A console for the MCP server that wraps the web research services. List the available tools, fill in their parameters, and run them individually — or describe a process in plain language to generate and execute a multi-step workflow.</p>
+      <div class="mt-3 flex flex-wrap items-center gap-2 text-sm">
+        <span class="px-3 py-1 rounded bg-blue-50 border border-blue-100 text-slate-700">
+          <span class="font-semibold text-slate-500">REST API: </span>
+          <span id="rest-api-url" class="font-mono font-semibold text-slate-800 ml-1"></span>
+        </span>
+        <span class="px-3 py-1 rounded bg-slate-100 border border-slate-200 text-slate-700">
+          <span class="font-semibold text-slate-500">MCP Server: </span>
+          <span id="mcp-server-url" class="font-mono font-semibold text-slate-800 ml-1"></span>
+        </span>
+      </div>
+      <script>
+        document.getElementById('rest-api-url').textContent = location.origin;
+        document.getElementById('mcp-server-url').textContent = `${location.origin}/mcp`;
+      </script>
+      <div class="mt-3 flex flex-wrap items-center gap-3">
+        <p class="w-full text-xs text-slate-400 italic">extract and interact are not part of self-hosted open-source Firecrawl — they are custom supplements added alongside it.</p>
+        <div class="w-full text-xs text-slate-500 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-1">
+          <span><span class="font-medium">firecrawl</span> — search, scrape, map &amp; crawl pages</span>
+          <span><span class="font-medium">extract</span> — LLM structured extraction (Ollama)</span>
+          <span><span class="font-medium">interact</span> — Playwright browser sessions</span>
+          <span><span class="font-medium">gateway</span> — routes API requests to firecrawl, extract or interact</span>
+        </div>
+        <div id="health-indicators" class="w-full text-xs grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-1"></div>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-4 py-6">
+    <!-- 1. Connect -->
+    <div class="mb-4 p-4 border rounded bg-white">
+      <div class="flex items-center justify-between mb-2">
+        <h3 class="font-semibold">1. Connect to MCP server</h3>
+        <span id="mcp-conn-status" class="text-sm text-red-600">Not connected</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="connectMcp()" class="bg-blue-600 text-white px-4 py-2 rounded">Connect</button>
+        <button onclick="resetMcp()" class="bg-slate-500 text-white px-4 py-2 rounded">Reset</button>
+        <input id="mcp-session-id" type="text" class="border rounded px-3 py-1 flex-1 font-mono text-sm" placeholder="session id" readonly />
+        <button onclick="copyMcpSessionId()" class="bg-slate-500 text-white px-3 py-1 rounded text-sm">Copy</button>
+      </div>
+    </div>
+
+    <!-- Brand URLs -->
+    <div class="mb-4 p-4 border rounded bg-white">
+      <div class="flex items-center justify-between mb-2">
+        <h3 class="font-semibold">Brand URLs</h3>
+        <span id="brand-selected" class="text-sm text-slate-500">Select a brand to fill the url parameter of the open tool.</span>
+      </div>
+      <div id="brand-list"></div>
+    </div>
+
+    <!-- Path switcher -->
+    <div class="mb-4 flex gap-2">
+      <button id="path-tool-btn" onclick="setPath('tool')" class="flex-1 px-4 py-3 border rounded font-semibold transition text-left">Run a tool<span class="block text-xs font-normal mt-0.5">List tools, fill required/optional parameters, execute</span></button>
+      <button id="path-workflow-btn" onclick="setPath('workflow')" class="flex-1 px-4 py-3 border rounded font-semibold transition text-left">Build &amp; Execute<span class="block text-xs font-normal mt-0.5">Describe the process, generate a tool chain, run it</span></button>
+    </div>
+
+    <!-- Path: run a tool -->
+    <div id="path-tool">
+      <div class="mb-4 p-4 border rounded bg-white">
+        <h3 class="font-semibold mb-2">2. Pick a tool (<span id="tools-count">0</span>)</h3>
+        <p class="text-xs text-slate-500 mb-2">Click a tool to show its parameters. <span class="text-red-500">*</span> = required, <span class="text-slate-400">(optional)</span> = optional.</p>
+        <div id="mcp-tools-list" class="text-sm text-slate-500">Connect first to load tools.</div>
+      </div>
+    </div>
+
+    <!-- Path: build a workflow -->
+    <div id="path-workflow" class="hidden">
+      <div class="mb-4 p-4 border rounded bg-white">
+        <h3 class="font-semibold mb-2">2. Describe what the process should do</h3>
+        <textarea id="goal" rows="2" class="w-full border rounded p-2" placeholder="e.g. Search for the company, scrape the top result, and extract the leadership team"></textarea>
+        <div class="mt-2 flex items-center gap-2">
+          <button id="gen-btn" onclick="generateWorkflow()" class="bg-violet-600 text-white px-4 py-2 rounded" disabled>Generate steps</button>
+          <span id="gen-hint" class="text-sm text-slate-500">Connect first to load available tools.</span>
+        </div>
+      </div>
+
+      <div class="mb-4 p-4 border rounded bg-white">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="font-semibold">3. Workflow steps</h3>
+          <div class="flex items-center gap-2">
+            <label class="text-sm text-slate-600 flex items-center gap-1"><input id="stop-on-error" type="checkbox" checked /> Stop on error</label>
+            <button onclick="saveWorkflow()" class="bg-slate-500 text-white px-3 py-1 rounded text-sm">Save JSON</button>
+            <button onclick="clearWorkflow()" class="bg-slate-500 text-white px-3 py-1 rounded text-sm">Clear</button>
+            <button id="run-btn" onclick="runWorkflow()" class="bg-emerald-600 text-white px-4 py-2 rounded" disabled>Run workflow</button>
+          </div>
+        </div>
+        <p class="text-xs text-slate-500 mb-2">Arguments are JSON. Use <span class="font-mono">{{lastData.&lt;path&gt;}}</span> to reference fields from a previous step's result (e.g. <span class="font-mono">{{lastData.url}}</span>).</p>
+        <div id="workflow-steps" class="text-sm text-slate-500">No steps yet. Generate from a goal above, or add a tool from the Run a tool path.</div>
+      </div>
+    </div>
+
+    <pre id="out" class="mt-2 p-3 bg-slate-100 rounded text-sm"></pre>
+  </main>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    const url = p => `${location.origin}${p}`;
+    const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    let mcpSessionId = '';
+    let mcpTools = [];
+    let openTool = -1;
+    let workflow = [];
+    let selectedBrand = null;
+    let currentPath = 'tool';
+
+    const BRAND_GROUPS = [
+      { cat: 'Mainstream cruise lines', brands: [
+        ['Royal Caribbean', 'https://www.royalcaribbean.com'],
+        ['Carnival', 'https://www.carnival.com'],
+        ['MSC Cruises', 'https://www.msccruises.com'],
+        ['Norwegian Cruise Line', 'https://www.ncl.com'],
+        ['Princess Cruises', 'https://www.princess.com'],
+        ['Celebrity Cruises', 'https://www.celebritycruises.com'],
+        ['Disney Cruise Line', 'https://disneycruise.disney.go.com'],
+        ['Holland America', 'https://www.hollandamerica.com'],
+        ['Cunard', 'https://www.cunard.com'],
+        ['Costa Cruises', 'https://www.costacruises.com'],
+        ['AIDA Cruises', 'https://www.aida.de'],
+        ['P&O Cruises', 'https://www.pocruises.com'],
+        ['Viking', 'https://www.viking.com'],
+        ['Virgin Voyages', 'https://www.virginvoyages.com'],
+        ['Oceania Cruises', 'https://www.oceaniacruises.com'],
+        ['Azamara', 'https://www.azamara.com'],
+        ['Marella Cruises', 'https://www.tui.co.uk/cruise'],
+        ['Fred. Olsen', 'https://www.fredolsencruises.com'],
+        ['Ambassador', 'https://www.ambassadorcruiseline.com'],
+        ['Margaritaville at Sea', 'https://www.margaritavilleatsea.com'],
+        ['Celestyal', 'https://www.celestyal.com'],
+        ['American Cruise Lines', 'https://www.americancruiselines.com'],
+        ['Paul Gauguin', 'https://www.pgcruises.com'],
+        ['Windstar', 'https://www.windstarcruises.com'],
+        ['Star Clippers', 'https://www.starclippers.com'],
+      ]},
+      { cat: 'Cruise — luxury, expedition & river', brands: [
+        ['Silversea', 'https://www.silversea.com'],
+        ['Regent Seven Seas', 'https://www.rssc.com'],
+        ['Seabourn', 'https://www.seabourn.com'],
+        ['Crystal', 'https://www.crystalcruises.com'],
+        ['Explora Journeys', 'https://www.explorajourneys.com'],
+        ['Ritz-Carlton Yacht Collection', 'https://www.ritzcarltonyachtcollection.com'],
+        ['Ponant', 'https://www.ponant.com'],
+        ['SeaDream Yacht Club', 'https://www.seadream.com'],
+        ['Scenic', 'https://www.scenic.com'],
+        ['Emerald Cruises', 'https://www.emeraldcruises.com'],
+        ['AmaWaterways', 'https://www.amawaterways.com'],
+        ['Uniworld', 'https://www.uniworld.com'],
+        ['Tauck', 'https://www.tauck.com'],
+        ['Lindblad Expeditions', 'https://www.lindblad.com'],
+        ['HX Expeditions', 'https://www.travelhx.com'],
+        ['Atlas Ocean Voyages', 'https://www.atlasoceanvoyages.com'],
+        ['Swan Hellenic', 'https://www.swanhellenic.com'],
+        ['Quark Expeditions', 'https://www.quarkexpeditions.com'],
+        ['Aurora Expeditions', 'https://www.aurora-expeditions.com'],
+        ['Hapag-Lloyd Cruises', 'https://www.hl-cruises.com'],
+        ['Sea Cloud Cruises', 'https://www.seacloud.com'],
+        ['Coral Expeditions', 'https://www.coralexpeditions.com'],
+        ['UnCruise Adventures', 'https://www.uncruise.com'],
+      ]},
+      { cat: 'Hotels', brands: [
+        ['Marriott', 'https://www.marriott.com'],
+        ['Hilton', 'https://www.hilton.com'],
+        ['IHG', 'https://www.ihg.com'],
+        ['Hyatt', 'https://www.hyatt.com'],
+        ['Accor', 'https://all.accor.com'],
+        ['Wyndham', 'https://www.wyndhamhotels.com'],
+        ['Choice Hotels', 'https://www.choicehotels.com'],
+        ['Best Western', 'https://www.bestwestern.com'],
+        ['Four Seasons', 'https://www.fourseasons.com'],
+        ['Ritz-Carlton', 'https://www.ritzcarlton.com'],
+        ['Fairmont', 'https://www.fairmont.com'],
+        ['Sandals', 'https://www.sandals.com'],
+        ['Club Med', 'https://www.clubmed.com'],
+        ['Waldorf Astoria', 'https://www.waldorfastoria.com'],
+        ['Conrad', 'https://www.conradhotels.com'],
+        ['Sofitel', 'https://www.sofitel.com'],
+        ['Shangri-La', 'https://www.shangri-la.com'],
+        ['Mandarin Oriental', 'https://www.mandarinoriental.com'],
+        ['Peninsula', 'https://www.peninsula.com'],
+        ['Jumeirah', 'https://www.jumeirah.com'],
+        ['Kempinski', 'https://www.kempinski.com'],
+        ['Kimpton', 'https://www.kimptonhotels.com'],
+        ['Loews', 'https://www.loewshotels.com'],
+        ['Omni', 'https://www.omnihotels.com'],
+        ['Raffles', 'https://www.raffles.com'],
+        ['Rosewood', 'https://www.rosewoodhotels.com'],
+        ['Aman', 'https://www.aman.com'],
+        ['Six Senses', 'https://www.sixsenses.com'],
+        ['Belmond', 'https://www.belmond.com'],
+        ['Banyan Tree', 'https://www.banyantree.com'],
+        ['Montage', 'https://www.montage.com'],
+        ['Auberge Resorts', 'https://www.aubergeresorts.com'],
+        ['Langham', 'https://www.langhamhotels.com'],
+        ['Taj Hotels', 'https://www.tajhotels.com'],
+        ['Oberoi', 'https://www.oberoihotels.com'],
+        ['1 Hotels', 'https://www.1hotels.com'],
+      ]},
+      { cat: 'Airlines', brands: [
+        ['Delta', 'https://www.delta.com'],
+        ['United', 'https://www.united.com'],
+        ['American', 'https://www.aa.com'],
+        ['Southwest', 'https://www.southwest.com'],
+        ['Emirates', 'https://www.emirates.com'],
+        ['British Airways', 'https://www.britishairways.com'],
+        ['Lufthansa', 'https://www.lufthansa.com'],
+        ['Qatar Airways', 'https://www.qatarairways.com'],
+        ['Singapore Airlines', 'https://www.singaporeair.com'],
+        ['Turkish Airlines', 'https://www.turkishairlines.com'],
+        ['Air Canada', 'https://www.aircanada.com'],
+        ['KLM', 'https://www.klm.com'],
+        ['WestJet', 'https://www.westjet.com'],
+        ['JetBlue', 'https://www.jetblue.com'],
+        ['Alaska Airlines', 'https://www.alaskaair.com'],
+        ['ANA', 'https://www.ana.co.jp'],
+        ['Japan Airlines', 'https://www.jal.com'],
+        ['Cathay Pacific', 'https://www.cathaypacific.com'],
+        ['Korean Air', 'https://www.koreanair.com'],
+        ['Etihad', 'https://www.etihad.com'],
+        ['Qantas', 'https://www.qantas.com'],
+        ['Air New Zealand', 'https://www.airnewzealand.com'],
+        ['Swiss', 'https://www.swiss.com'],
+        ['Iberia', 'https://www.iberia.com'],
+        ['Virgin Atlantic', 'https://www.virginatlantic.com'],
+        ['Aer Lingus', 'https://www.aerlingus.com'],
+        ['Finnair', 'https://www.finnair.com'],
+        ['SAS', 'https://www.flysas.com'],
+        ['TAP Air Portugal', 'https://www.flytap.com'],
+        ['ITA Airways', 'https://www.ita-airways.com'],
+        ['Hawaiian Airlines', 'https://www.hawaiianairlines.com'],
+        ['EVA Air', 'https://www.evaair.com'],
+        ['Icelandair', 'https://www.icelandair.com'],
+        ['Aeromexico', 'https://www.aeromexico.com'],
+        ['LATAM', 'https://www.latamairlines.com'],
+        ['Copa Airlines', 'https://www.copaair.com'],
+        ['Norwegian', 'https://www.norwegian.com'],
+        ['Condor', 'https://www.condor.com'],
+        ['Porter Airlines', 'https://www.flyporter.com'],
+        ['Air Transat', 'https://www.airtransat.com'],
+      ]},
+    ];
+    const BRAND_LIST = BRAND_GROUPS.flatMap(g => g.brands);
+    const CANADIAN = new Set(['Air Canada', 'WestJet', 'Porter Airlines', 'Air Transat', 'Fairmont', 'Four Seasons']);
+
+    async function callMcpRaw(body, sid) {
+      const headers = { 'Content-Type': 'application/json' };
+      if (GATEWAY_API_KEY) headers['Authorization'] = 'Bearer ' + GATEWAY_API_KEY;
+      if (sid) headers['Mcp-Session-Id'] = sid;
+      const res = await fetch(url('/mcp'), { method: 'POST', headers, body: JSON.stringify(body) });
+      const text = await res.text();
+      const newSid = res.headers.get('mcp-session-id');
+      return { status: res.status, text, sid: newSid };
+    }
+
+    function extractMcpResult(text) {
+      const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+      for (const line of lines) {
+        if (!line.startsWith('data:')) continue;
+        try { return JSON.parse(line.slice(5).trim()); } catch {}
+      }
+      try { return JSON.parse(text); } catch {}
+      return null;
+    }
+
+    function prettyJson(s) {
+      try { return JSON.stringify(JSON.parse(s), null, 2); } catch { return s; }
+    }
+
+    function formatMcpOutput(text, pretty) {
+      if (!pretty) return text;
+      const data = extractMcpResult(text);
+      if (!data) return prettyJson(text);
+      if (data.result && data.result.content) {
+        return data.result.content.map(c => c.text ? prettyJson(c.text) : JSON.stringify(c, null, 2)).join('\n\n');
+      }
+      return JSON.stringify(data.result ?? data, null, 2);
+    }
+
+    function linkify(text) {
+      const A = 'text-blue-600 underline break-all';
+      const anchors = [];
+      let h = esc(text);
+      // markdown links [text](url) -> placeholder so the url isn't re-linkified
+      h = h.replace(/\[([^\]]*)\]\((https?:\/\/[^\s)]+)\)/g, (m, t, u) => {
+        anchors.push(`<a href="${u}" target="_blank" rel="noopener noreferrer" class="${A}">${t || u}</a>`);
+        return `\u0000${anchors.length - 1}\u0000`;
+      });
+      // bare http(s)/www. urls
+      h = h.replace(/(https?:\/\/[^\s<>"'\u0000]+|www\.[^\s<>"'\u0000]+)/g, (m) => {
+        let url = m, trail = '';
+        while (url.length) {
+          const c = url.slice(-1);
+          const opens = (url.match(/\(/g) || []).length, closes = (url.match(/\)/g) || []).length;
+          if (/[.,;:!?'"]/.test(c) || (c === ')' && closes > opens)) { trail = c + trail; url = url.slice(0, -1); }
+          else break;
+        }
+        const href = /^https?:/i.test(url) ? url : 'http://' + url;
+        return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="${A}">${url}</a>${trail}`;
+      });
+      return h.replace(/\u0000(\d+)\u0000/g, (m, k) => anchors[+k]);
+    }
+
+    function setOut(text) { $('out').innerHTML = linkify(text); }
+
+    function updateMcpContext(ctx, data) {
+      const content = data?.result?.content;
+      if (!Array.isArray(content)) return;
+      for (const c of content) {
+        if (c.type !== 'text' || !c.text) continue;
+        let parsed = null;
+        try { parsed = JSON.parse(c.text); } catch {}
+        if (!parsed) continue;
+        if (parsed.success && Array.isArray(parsed.data) && parsed.data.length) ctx.lastData = parsed.data[0];
+        else if (parsed.success && parsed.data && typeof parsed.data === 'object') ctx.lastData = parsed.data;
+        else if (parsed.markdown) ctx.lastData = parsed;
+        else if (parsed.data && typeof parsed.data === 'object') ctx.lastData = parsed.data;
+      }
+    }
+
+    function getByPath(obj, expr) {
+      if (!expr) return undefined;
+      const parts = expr.replace(/\[(\d+)\]/g, '.$1').split('.').filter(Boolean);
+      let cur = obj;
+      for (const p of parts) {
+        if (cur == null) return undefined;
+        cur = cur[p];
+      }
+      return cur;
+    }
+
+    function subPlaceholders(value, ctx) {
+      if (typeof value === 'string') {
+        const m = value.match(/^\{\{(.+)\}\}$/);
+        if (m) return getByPath(ctx, m[1].trim());
+        return value.replace(/\{\{(.+?)\}\}/g, (_, e) => {
+          const v = getByPath(ctx, e.trim());
+          return v === undefined ? '' : (typeof v === 'object' ? JSON.stringify(v) : String(v));
+        });
+      }
+      if (Array.isArray(value)) return value.map(v => subPlaceholders(v, ctx));
+      if (value && typeof value === 'object') {
+        const out = {};
+        for (const [k, v] of Object.entries(value)) out[k] = subPlaceholders(v, ctx);
+        return out;
+      }
+      return value;
+    }
+
+    // ---- Paths ----
+
+    function setPath(p) {
+      currentPath = p;
+      $('path-tool').classList.toggle('hidden', p !== 'tool');
+      $('path-workflow').classList.toggle('hidden', p !== 'workflow');
+      const on = 'bg-blue-600 text-white border-blue-600';
+      const off = 'bg-white text-slate-700 hover:bg-blue-50';
+      $('path-tool-btn').className = `flex-1 px-4 py-3 border rounded font-semibold transition text-left ${p === 'tool' ? on : off}`;
+      $('path-workflow-btn').className = `flex-1 px-4 py-3 border rounded font-semibold transition text-left ${p === 'workflow' ? on : off}`;
+    }
+
+    // ---- Connect ----
+
+    async function connectMcp() {
+      const status = $('mcp-conn-status');
+      const out = $('out');
+      status.textContent = 'Connecting...';
+      status.className = 'text-sm text-slate-500';
+      try {
+        const res = await callMcpRaw({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'web-research-mcp-ui', version: '0.1.0' } } });
+        if (res.status !== 200) {
+          status.textContent = 'Failed';
+          status.className = 'text-sm text-red-600';
+          setOut(`HTTP ${res.status}\n\n${res.text}`);
+          return;
+        }
+        mcpSessionId = res.sid || '';
+        $('mcp-session-id').value = mcpSessionId;
+        status.textContent = 'Connected — loading tools...';
+        status.className = 'text-sm text-emerald-600';
+        setOut(`Connected. Session: ${mcpSessionId || '(none)'}`);
+        await listTools();
+        status.textContent = 'Connected';
+      } catch (e) {
+        status.textContent = 'Error';
+        status.className = 'text-sm text-red-600';
+        setOut(`Error: ${e.message}`);
+      }
+    }
+
+    function resetMcp() {
+      mcpSessionId = '';
+      mcpTools = [];
+      openTool = -1;
+      workflow = [];
+      $('mcp-session-id').value = '';
+      $('mcp-conn-status').textContent = 'Not connected';
+      $('mcp-conn-status').className = 'text-sm text-red-600';
+      $('mcp-tools-list').textContent = 'Connect first to load tools.';
+      $('tools-count').textContent = '0';
+      $('gen-btn').disabled = true;
+      $('gen-hint').textContent = 'Connect first to load available tools.';
+      renderWorkflow();
+      $('out').textContent = '';
+    }
+
+    function copyMcpSessionId() {
+      const el = $('mcp-session-id');
+      el.select();
+      document.execCommand('copy');
+    }
+
+    // ---- Tools ----
+
+    async function listTools() {
+      const list = $('mcp-tools-list');
+      try {
+        const res = await callMcpRaw({ jsonrpc: '2.0', id: 2, method: 'tools/list' }, mcpSessionId);
+        const data = extractMcpResult(res.text);
+        mcpTools = data?.result?.tools || [];
+        openTool = -1;
+        $('tools-count').textContent = String(mcpTools.length);
+        $('gen-btn').disabled = !mcpTools.length;
+        $('gen-hint').textContent = mcpTools.length ? '' : 'No tools returned by the server.';
+        renderToolsList();
+      } catch (e) {
+        list.textContent = 'Error loading tools: ' + e.message;
+      }
+    }
+
+    function renderToolsList() {
+      const list = $('mcp-tools-list');
+      if (!mcpTools.length) { list.textContent = 'No tools loaded.'; return; }
+      list.className = 'mt-2 text-sm';
+      list.innerHTML = mcpTools.map((t, i) => `
+        <div class="border rounded mb-1 ${openTool === i ? 'bg-blue-50 border-blue-300' : 'bg-white'}">
+          <button onclick="toggleTool(${i})" class="w-full text-left px-3 py-2 hover:bg-blue-50">
+            <span class="font-mono font-medium">${esc(t.name)}</span>
+            <span class="text-xs text-slate-500 ml-2">${esc(t.description || '')}</span>
+          </button>
+          <div id="tool-params-${i}" class="${openTool === i ? '' : 'hidden'} px-3 pb-3"></div>
+        </div>`).join('');
+      if (openTool >= 0) renderToolParams(openTool);
+    }
+
+    function toggleTool(i) {
+      openTool = openTool === i ? -1 : i;
+      renderToolsList();
+    }
+
+    function normSchema(p, root) {
+      if (!p) return {};
+      if (p.$ref) {
+        const name = p.$ref.split('/').pop();
+        const resolved = (root.$defs && root.$defs[name]) || {};
+        return normSchema({ ...resolved, description: p.description || resolved.description }, root);
+      }
+      const cand = p.anyOf || p.oneOf;
+      if (cand) {
+        const branch = cand.find(b => (b.type && b.type !== 'null') || b.$ref) || cand[0] || {};
+        const nb = normSchema(branch, root);
+        return { ...nb, description: p.description || nb.description };
+      }
+      return p;
+    }
+
+    function renderFields(props, required, prefix, i, root) {
+      return Object.keys(props).map(k => {
+        const p = normSchema(props[k], root);
+        const req = required.includes(k);
+        const type = p.type || 'string';
+        const desc = p.description || '';
+        const path = prefix ? `${prefix}__${k}` : k;
+        const id = `param-${i}-${path}`;
+        const label = `<label class="block text-sm font-medium mb-1">${esc(k)} ${req ? '<span class="text-red-500">*</span>' : '<span class="text-slate-400">(optional)</span>'} <span class="font-normal text-slate-500">— ${esc(type)}${desc ? ' — ' + esc(desc) : ''}</span></label>`;
+        const itemEnum = type === 'array' && p.items ? normSchema(p.items, root).enum : null;
+        let input = '';
+        if (p.enum) {
+          const opts = (req ? '' : '<option value="">(not set)</option>') + p.enum.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
+          input = `<select id="${id}" data-path="${path}" data-type="enum" class="w-full border rounded px-3 py-1 font-mono text-sm">${opts}</select>`;
+        } else if (itemEnum) {
+          input = `<div class="flex flex-wrap gap-x-4 gap-y-1">${itemEnum.map(v => `<label class="flex items-center gap-1 text-sm font-normal"><input type="checkbox" data-path="${path}" data-type="array-enum" value="${esc(v)}" />${esc(v)}</label>`).join('')}</div>`;
+        } else if (type === 'boolean') {
+          input = `<input id="${id}" type="checkbox" data-path="${path}" data-type="boolean" class="border rounded px-3 py-1" />`;
+        } else if (type === 'number' || type === 'integer') {
+          input = `<input id="${id}" type="number" data-path="${path}" data-type="number" class="w-full border rounded px-3 py-1 font-mono text-sm" ${p.default !== undefined ? 'value="' + esc(p.default) + '"' : ''} />`;
+        } else if (type === 'object' && p.properties && Object.keys(p.properties).length) {
+          input = `<div class="ml-3 pl-3 border-l-2 border-slate-200">${renderFields(p.properties, p.required || [], path, i, root)}</div>`;
+        } else if (type === 'object' || type === 'array') {
+          const prefill = (k === 'urls' && selectedBrand) ? JSON.stringify([selectedBrand.url]) : '';
+          input = `<textarea id="${id}" data-path="${path}" data-type="json" rows="2" class="w-full border rounded p-2 font-mono text-sm" placeholder='${esc(JSON.stringify(p.default !== undefined ? p.default : (type === 'array' ? [] : {})))}'>${esc(prefill)}</textarea>`;
+        } else {
+          const prefill = (k === 'url' && selectedBrand) ? selectedBrand.url : (p.default !== undefined ? p.default : undefined);
+          input = `<input id="${id}" type="text" data-path="${path}" data-type="string" class="w-full border rounded px-3 py-1 font-mono text-sm" ${prefill !== undefined ? 'value="' + esc(prefill) + '"' : ''} />`;
+        }
+        return `<div class="mb-2">${label}${input}</div>`;
+      }).join('');
+    }
+
+    function renderToolParams(i) {
+      const container = $('tool-params-' + i);
+      const tool = mcpTools[i];
+      if (!container || !tool) return;
+      const root = tool.inputSchema || {};
+      const props = root.properties || {};
+      const fields = Object.keys(props).length ? renderFields(props, root.required || [], '', i, root) : '<div class="text-sm text-slate-500 mb-2">No parameters.</div>';
+      container.innerHTML = `
+        <div class="flex gap-2 mb-2">
+          <button onclick="runTool(${i})" class="bg-emerald-600 text-white px-3 py-1 rounded text-sm">Run once</button>
+          <button onclick="addStep(${i})" class="bg-violet-600 text-white px-3 py-1 rounded text-sm">Add to workflow</button>
+        </div>` + fields;
+    }
+
+    function collectArgs(i) {
+      const out = $('out');
+      const tool = mcpTools[i];
+      const required = (tool.inputSchema || {}).required || [];
+      const args = {};
+      const container = $('tool-params-' + i);
+      for (const el of container.querySelectorAll('[data-path]')) {
+        const path = el.dataset.path;
+        const type = el.dataset.type;
+        let v;
+        if (type === 'boolean') { if (!el.checked) continue; v = true; }
+        else if (type === 'array-enum') { if (!el.checked) continue; v = el.value; }
+        else if (type === 'number') { if (el.value === '') continue; v = Number(el.value); }
+        else if (type === 'json') {
+          const raw = el.value.trim();
+          if (!raw) continue;
+          try { v = JSON.parse(raw); } catch (e) { setOut(`Invalid JSON for ${path}: ${e.message}`); return null; }
+        } else { if (el.value === '') continue; v = el.value; }
+        const parts = path.split('__');
+        let cur = args;
+        for (let j = 0; j < parts.length - 1; j++) cur = cur[parts[j]] = cur[parts[j]] || {};
+        const leaf = parts[parts.length - 1];
+        if (type === 'array-enum') (cur[leaf] = cur[leaf] || []).push(v);
+        else cur[leaf] = v;
+      }
+      for (const k of required) {
+        if (args[k] === undefined) { setOut(`Missing required parameter: ${k}`); return null; }
+      }
+      return args;
+    }
+
+    function addStep(i) {
+      const args = collectArgs(i);
+      if (args === null) return;
+      workflow.push({ tool: mcpTools[i].name, note: '', argsText: JSON.stringify(args, null, 2) });
+      renderWorkflow();
+      $('out').textContent = `Added step ${workflow.length}: ${mcpTools[i].name} — switch to "Build & Execute" to run it.`;
+    }
+
+    async function runTool(i) {
+      const args = collectArgs(i);
+      if (args === null) return;
+      const out = $('out');
+      setOut('Executing...');
+      try {
+        const res = await callMcpRaw({ jsonrpc: '2.0', id: Date.now(), method: 'tools/call', params: { name: mcpTools[i].name, arguments: args } }, mcpSessionId);
+        setOut(`HTTP ${res.status}\n\n${formatMcpOutput(res.text, true)}`);
+      } catch (e) {
+        setOut(`Error: ${e.message}`);
+      }
+    }
+
+    // ---- Workflow ----
+
+    function syncArgs() {
+      workflow.forEach((s, i) => {
+        const el = $('step-args-' + i);
+        if (el) s.argsText = el.value;
+      });
+    }
+
+    function renderWorkflow() {
+      const container = $('workflow-steps');
+      $('run-btn').disabled = !workflow.length;
+      if (!workflow.length) {
+        container.className = 'text-sm text-slate-500';
+        container.textContent = 'No steps yet. Generate from a goal above, or add a tool manually below.';
+        return;
+      }
+      container.className = '';
+      container.innerHTML = workflow.map((s, i) => `
+        <div class="border rounded p-2 mb-2 bg-slate-50">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="font-mono text-violet-700">${i + 1}.</span>
+            <span class="font-mono font-medium">${esc(s.tool)}</span>
+            <input type="text" value="${esc(s.note || '')}" placeholder="note" onchange="workflow[${i}].note=this.value" class="flex-1 border rounded px-2 py-0.5 text-xs text-slate-600" />
+            <button onclick="moveStep(${i},-1)" class="px-2 text-slate-500 hover:text-slate-900" title="Move up">&#8593;</button>
+            <button onclick="moveStep(${i},1)" class="px-2 text-slate-500 hover:text-slate-900" title="Move down">&#8595;</button>
+            <button onclick="delStep(${i})" class="px-2 text-red-500 hover:text-red-700" title="Delete">&#10005;</button>
+          </div>
+          <textarea id="step-args-${i}" rows="${Math.min(6, (s.argsText || '').split('\n').length + 1)}" class="w-full border rounded p-1 font-mono text-xs">${esc(s.argsText || '{}')}</textarea>
+        </div>`).join('');
+    }
+
+    function moveStep(i, d) {
+      const j = i + d;
+      if (j < 0 || j >= workflow.length) return;
+      syncArgs();
+      [workflow[i], workflow[j]] = [workflow[j], workflow[i]];
+      renderWorkflow();
+    }
+
+    function delStep(i) {
+      syncArgs();
+      workflow.splice(i, 1);
+      renderWorkflow();
+    }
+
+    function clearWorkflow() {
+      workflow = [];
+      renderWorkflow();
+    }
+
+    function saveWorkflow() {
+      syncArgs();
+      if (!workflow.length) { $('out').textContent = 'No steps to save.'; return; }
+      const steps = workflow.map(s => {
+        let args;
+        try { args = JSON.parse(s.argsText || '{}'); } catch { args = s.argsText; }
+        const step = { tool: s.tool, arguments: args };
+        if (s.note) step.note = s.note;
+        return step;
+      });
+      const blob = new Blob([JSON.stringify({ steps }, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'workflow.json';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+
+    async function generateWorkflow() {
+      const out = $('out');
+      const goal = $('goal').value.trim();
+      if (!goal) { setOut('Describe the process first.'); return; }
+      if (!mcpTools.length) { setOut('Connect first to load tools.'); return; }
+      setOut('Generating steps...');
+      const toolDocs = mcpTools.map(t => `- ${t.name}: ${JSON.stringify(t.inputSchema || {})}${t.description ? ' — ' + t.description : ''}`).join('\n');
+      try {
+        const res = await fetch(url('/v1/extract'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(GATEWAY_API_KEY ? { 'Authorization': 'Bearer ' + GATEWAY_API_KEY } : {}) },
+          body: JSON.stringify({
+            content: `Goal: ${goal}\n\nAvailable MCP tools (invoked via tools/call):\n${toolDocs}\n\nReturn a JSON array of steps. Each step: { "tool": "<tool name>", "arguments": { ... }, "note": "why" }. Use {{lastData.<path>}} to reference fields from a previous step's result (e.g. {{lastData.url}}, {{lastData.markdown}}).`,
+            schema: { type: 'array', items: { type: 'object', properties: { tool: { type: 'string' }, arguments: { type: 'object' }, note: { type: 'string' } }, required: ['tool'] } },
+            instruction: 'Return only the JSON array of steps.',
+            max_retries: 1
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) { setOut(`HTTP ${res.status}\n\n${JSON.stringify(data, null, 2)}`); return; }
+        const steps = data.data || data;
+        if (!Array.isArray(steps)) { setOut('Planner did not return an array:\n' + JSON.stringify(data, null, 2)); return; }
+        syncArgs();
+        workflow = steps.map(s => ({ tool: s.tool, note: s.note || '', argsText: JSON.stringify(s.arguments || {}, null, 2) }));
+        renderWorkflow();
+        setOut(`Generated ${workflow.length} steps. Review and edit, then run.`);
+      } catch (e) {
+        setOut(`Error: ${e.message}`);
+      }
+    }
+
+    async function runWorkflow() {
+      const out = $('out');
+      if (!workflow.length) { setOut('No steps to run.'); return; }
+      syncArgs();
+      const ctx = {};
+      const results = [];
+      setOut('Running workflow...');
+      try {
+        for (let i = 0; i < workflow.length; i++) {
+          const step = workflow[i];
+          let args;
+          try { args = JSON.parse(step.argsText || '{}'); }
+          catch (e) { setOut(`Step ${i + 1} (${step.tool}): invalid JSON arguments — ${e.message}`); return; }
+          args = subPlaceholders(args, ctx);
+          const unresolved = JSON.stringify(args).match(/\{\{[^}]+\}\}/);
+          if (unresolved) {
+            setOut(`Step ${i + 1} (${step.tool}): unresolved placeholder ${unresolved[0]} — a previous step did not produce that field.\n\n` + JSON.stringify(results, null, 2));
+            return;
+          }
+          const res = await callMcpRaw({ jsonrpc: '2.0', id: i + 1, method: 'tools/call', params: { name: step.tool, arguments: args } }, mcpSessionId);
+          const data = extractMcpResult(res.text);
+          const isErr = res.status !== 200 || data?.result?.isError === true || !!data?.error;
+          results.push({ step: i + 1, tool: step.tool, arguments: args, status: res.status, error: isErr || undefined, data });
+          updateMcpContext(ctx, data);
+          setOut(`Step ${i + 1}/${workflow.length} ${isErr ? 'FAILED' : 'done'} (${step.tool})\n\n` + JSON.stringify(results, null, 2));
+          if (isErr && $('stop-on-error').checked) {
+            setOut(`Stopped at step ${i + 1} (${step.tool}) — error.\n\n` + JSON.stringify(results, null, 2));
+            return;
+          }
+        }
+        setOut('Workflow complete.\n\n' + JSON.stringify(results, null, 2));
+      } catch (e) {
+        setOut(`Error at step ${results.length + 1}: ${e.message}\n\n` + JSON.stringify(results, null, 2));
+      }
+    }
+
+    // ---- Brands ----
+
+    function renderBrands() {
+      let idx = 0;
+      const list = $('brand-list');
+      list.className = 'flex flex-wrap gap-3 items-end';
+      list.innerHTML = BRAND_GROUPS.map(g => {
+        const selIsCa = selectedBrand && g.brands.some(([n, u]) => u === selectedBrand.url && CANADIAN.has(n));
+        const opts = g.brands.map(([name, u]) => {
+          const i = idx++;
+          const sel = selectedBrand && selectedBrand.url === u;
+          return `<option value="${i}" ${sel ? 'selected' : ''}>${esc(name)}</option>`;
+        }).join('');
+        return `
+          <div class="flex-1 min-w-[180px]">
+            <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">${esc(g.cat)}</label>
+            <select onchange="if(this.value!=='')useBrand(+this.value)" class="w-full border rounded px-3 py-1 text-sm ${selIsCa ? 'border-red-500 border-2' : ''}">
+              <option value="">Select…</option>
+              ${opts}
+            </select>
+          </div>`;
+      }).join('');
+    }
+
+    function useBrand(i) {
+      selectedBrand = { name: BRAND_LIST[i][0], url: BRAND_LIST[i][1] };
+      renderBrands();
+      if (openTool < 0) {
+        $('brand-selected').textContent = `${selectedBrand.name} selected — open a tool in "Run a tool" to apply it.`;
+        return;
+      }
+      $('brand-selected').textContent = `${selectedBrand.name} — ${selectedBrand.url}`;
+      const props = (mcpTools[openTool].inputSchema || {}).properties || {};
+      const urlEl = $(`param-${openTool}-url`);
+      const urlsEl = $(`param-${openTool}-urls`);
+      if (urlEl && 'url' in props) urlEl.value = selectedBrand.url;
+      else if (urlsEl && 'urls' in props) urlsEl.value = JSON.stringify([selectedBrand.url]);
+    }
+
+    // ---- Health ----
+
+    async function pollHealth() {
+      const container = $('health-indicators');
+      try {
+        const res = await fetch(url('/health'));
+        const data = await res.json();
+        const services = data.services || {};
+        const order = ['firecrawl', 'extract', 'interact', 'gateway'];
+        const names = order.filter(n => n in services).concat(Object.keys(services).filter(n => !order.includes(n)));
+        container.innerHTML = names.map(n => {
+          const s = services[n];
+          const ok = s === true || (s && s.status === 'ok');
+          const label = s === true ? 'ok' : (s && s.status ? s.status : 'down');
+          const card = ok ? 'border-emerald-200 bg-emerald-50' : 'border-red-200 bg-red-50';
+          const dot = ok ? 'bg-emerald-500' : 'bg-red-500';
+          const nameCls = ok ? 'text-slate-700' : 'text-red-600';
+          const statusCls = ok ? 'text-emerald-600' : 'text-red-500';
+          return `<span class="flex items-center gap-2 px-3 py-1.5 rounded-md border ${card}"><span class="inline-block w-2 h-2 rounded-full flex-shrink-0 ${dot}"></span><span class="font-medium ${nameCls}">${esc(n)}</span><span class="ml-auto text-[11px] font-medium ${statusCls}">${esc(label)}</span></span>`;
+        }).join('');
+      } catch {
+        container.innerHTML = '<span class="text-red-600">Health check failed</span>';
+      }
+    }
+    setInterval(pollHealth, 5000);
+    setPath('tool');
+    renderBrands();
+    pollHealth();
+  </script>
+</body>
+</html>
