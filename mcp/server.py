@@ -1,4 +1,5 @@
 import base64
+import json
 import os
 from typing import Annotated, Any, Literal, TypedDict
 
@@ -135,13 +136,22 @@ async def search(
 async def map_site(
     url: Annotated[str, Field(description="Website URL to map")],
     limit: Annotated[int, Field(description="Max number of URLs to return")] = 100,
+    url_contains: Annotated[str | None, Field(description="Only return links whose URL contains this substring (case-insensitive). Applied after `limit`, so matches may be fewer than `limit`.")] = None,
     options: Annotated[MapOptions | None, Field(description="Additional map options")] = None,
 ) -> Any:
     """Map discoverable URLs on a website."""
     payload = {"url": url, "limit": limit}
     if options:
         payload.update(options)
-    return await _post("/v1/map", payload)
+    result = await _post("/v1/map", payload)
+    if url_contains and isinstance(result, dict) and isinstance(result.get("links"), list):
+        needle = url_contains.lower()
+        result["links"] = [
+            link
+            for link in result["links"]
+            if needle in (link if isinstance(link, str) else str(link.get("url", ""))).lower()
+        ]
+    return result
 
 
 @mcp.tool
@@ -183,7 +193,7 @@ async def extract(
     schema: Annotated[dict[str, Any], Field(description="JSON Schema describing the fields to extract")],
     instruction: Annotated[str, Field(description="Extraction instruction for the LLM")] = "Extract the requested fields.",
     url: Annotated[str | None, Field(description="URL to scrape, then extract from")] = None,
-    content: Annotated[str | None, Field(description="Raw content to extract from instead of a URL")] = None,
+    content: Annotated[Any, Field(description="Raw content to extract from instead of a URL — accepts text or JSON data (e.g. {{lastData}})")] = None,
     options: Annotated[ExtractOptions | None, Field(description="Additional extract options")] = None,
 ) -> Any:
     """Extract structured JSON from a URL or from supplied content using the provided JSON Schema."""
@@ -191,9 +201,33 @@ async def extract(
     if url:
         payload["url"] = url
     if content:
-        payload["content"] = content
+        payload["content"] = content if isinstance(content, str) else json.dumps(content)
     if options:
         payload.update(options)
+    return await _post("/v1/extract", payload)
+
+
+@mcp.tool
+async def interpret(
+    question: Annotated[str, Field(description="What the LLM should do with the data, e.g. 'Summarize the key findings' or 'Which URLs look most relevant to X?'")],
+    content: Annotated[Any, Field(description="JSON data or text to interpret — e.g. {{lastData}} or {{lastData.links}} from a previous step")],
+    model: Annotated[str | None, Field(description="Ollama model override")] = None,
+) -> Any:
+    """Send JSON results or text to the LLM for interpretation, summary, or analysis. Returns {analysis: string}."""
+    payload: dict[str, Any] = {
+        "schema": {
+            "type": "object",
+            "properties": {
+                "analysis": {"type": "string", "description": "Free-form analysis answering the instruction"},
+            },
+            "required": ["analysis"],
+            "additionalProperties": False,
+        },
+        "instruction": question,
+        "content": content if isinstance(content, str) else json.dumps(content),
+    }
+    if model:
+        payload["model"] = model
     return await _post("/v1/extract", payload)
 
 

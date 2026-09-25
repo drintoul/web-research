@@ -1,4 +1,5 @@
 import os
+import time
 from typing import Any
 
 import httpx
@@ -15,7 +16,10 @@ FIRECRAWL = os.getenv("FIRECRAWL_BASE_URL", "http://firecrawl-api:3002").rstrip(
 EXTRACT = os.getenv("EXTRACT_BASE_URL", "http://extract:8090").rstrip("/")
 INTERACT = os.getenv("INTERACT_BASE_URL", "http://interact:8091").rstrip("/")
 MCP = os.getenv("MCP_BASE_URL", "http://mcp:8081").rstrip("/")
+PLANNER = os.getenv("PLANNER_BASE_URL", "http://planner:8093").rstrip("/")
 TIMEOUT = float(os.getenv("SERVICE_TIMEOUT_SECONDS", "180"))
+HEALTH_CACHE_TTL = float(os.getenv("HEALTH_CACHE_TTL", "5"))
+_HEALTH_CACHE = {"at": 0.0, "result": {}}
 
 app = FastAPI(title="Web Research Gateway", version="0.1.0")
 app.add_middleware(RequestContextMiddleware)
@@ -53,6 +57,9 @@ async def _json_proxy(method: str, url: str, request: Request, payload: Any | No
 
 @app.get("/health")
 async def health():
+    now = time.time()
+    if now - _HEALTH_CACHE["at"] < HEALTH_CACHE_TTL:
+        return _HEALTH_CACHE["result"]
     checks = {}
     async with httpx.AsyncClient(timeout=5) as client:
         for name, url in {
@@ -65,7 +72,10 @@ async def health():
             except Exception:
                 checks[name] = False
     checks["gateway"] = True
-    return {"ok": all(checks.values()), "services": checks}
+    result = {"ok": all(checks.values()), "services": checks}
+    _HEALTH_CACHE["at"] = now
+    _HEALTH_CACHE["result"] = result
+    return result
 
 
 @app.post("/v1/search")
@@ -214,6 +224,26 @@ async def extract_instruction_suggest(payload: dict[str, Any], request: Request)
     return await _json_proxy("POST", f"{EXTRACT}/v1/instruction-suggest", request, forward)
 
 
+@app.post("/v1/workflow/plan")
+async def workflow_plan(payload: dict[str, Any], request: Request):
+    return await _json_proxy("POST", f"{PLANNER}/v1/workflow/plan", request, payload)
+
+
+@app.post("/v1/workflow/validate")
+async def workflow_validate(payload: dict[str, Any], request: Request):
+    return await _json_proxy("POST", f"{PLANNER}/v1/workflow/validate", request, payload)
+
+
+@app.post("/v1/workflow/execute")
+async def workflow_execute(payload: dict[str, Any], request: Request):
+    return await _json_proxy("POST", f"{PLANNER}/v1/workflow/execute", request, payload)
+
+
+@app.post("/v1/workflow/run")
+async def workflow_run(payload: dict[str, Any], request: Request):
+    return await _json_proxy("POST", f"{PLANNER}/v1/workflow/run", request, payload)
+
+
 _UI_HTML: str | None = None
 _MCP_UI_HTML: str | None = None
 
@@ -243,8 +273,11 @@ def _get_mcp_ui_html() -> str:
     return _MCP_UI_HTML
 
 
+_NO_CACHE = {"Cache-Control": "no-cache"}
+
+
 def _ui_response() -> HTMLResponse:
-    return HTMLResponse(_get_ui_html())
+    return HTMLResponse(_get_ui_html(), headers=_NO_CACHE)
 
 
 @app.get("/ui", response_class=HTMLResponse)
@@ -260,7 +293,7 @@ async def ui_index():
 @app.get("/ui/{tab}", response_class=HTMLResponse)
 async def ui_tab(tab: str):
     if tab == "mcp":
-        return HTMLResponse(_get_mcp_ui_html())
+        return HTMLResponse(_get_mcp_ui_html(), headers=_NO_CACHE)
     return _ui_response()
 
 

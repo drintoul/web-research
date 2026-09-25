@@ -31,6 +31,7 @@ services:
       FIRECRAWL_BASE_URL: http://firecrawl-api:3002
       EXTRACT_BASE_URL: http://extract:8090
       INTERACT_BASE_URL: http://interact:8091
+      PLANNER_BASE_URL: http://planner:8093
       GATEWAY_API_KEY: ${GATEWAY_API_KEY}
       SERVICE_TIMEOUT_SECONDS: 180
       LOG_LEVEL: ${LOGGING_LEVEL}
@@ -146,6 +147,38 @@ services:
     tmpfs:
       - /tmp:size=512m
 
+  planner:
+    container_name: web-research-planner
+    build:
+      context: .
+      dockerfile: planner/Dockerfile
+    command: uvicorn planner.app:app --host 0.0.0.0 --port 8093
+    environment:
+      GATEWAY_BASE_URL: http://gateway:8080
+      MCP_BASE_URL: http://mcp:8081
+      GATEWAY_API_KEY: ${GATEWAY_API_KEY}
+      LOG_LEVEL: ${LOGGING_LEVEL}
+    ports:
+      - "127.0.0.1:${PLANNER_PORT}:8093"
+    depends_on:
+      gateway:
+        condition: service_started
+      mcp:
+        condition: service_started
+    networks: [web-research-network]
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8093/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   firecrawl-api:
     container_name: web-research-firecrawl-api
     image: ghcr.io/firecrawl/firecrawl@sha256:92ee28c20a0dc64e7605ea0edb33e0ea75b7127e34b9c1bc0cabea473b4f7d98
@@ -224,6 +257,7 @@ services:
   firecrawl-postgres:
     container_name: web-research-firecrawl-postgres
     image: ghcr.io/firecrawl/nuq-postgres@sha256:aed86f62858f29bd971abddcdeb301c12888098d2cf5d33c1ba42b053bc460f6
+    command: postgres -c log_min_messages=warning -c cron.log_run=off -c cron.log_statement=off
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}

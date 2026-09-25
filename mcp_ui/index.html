@@ -81,9 +81,11 @@
     </div>
 
     <!-- Path switcher -->
+    <div class="mb-2 text-sm text-slate-600">Choose how you want to interact with the research backend:</div>
     <div class="mb-4 flex gap-2">
-      <button id="path-tool-btn" onclick="setPath('tool')" class="flex-1 px-4 py-3 border rounded font-semibold transition text-left">Run a tool<span class="block text-xs font-normal mt-0.5">List tools, fill required/optional parameters, execute</span></button>
-      <button id="path-workflow-btn" onclick="setPath('workflow')" class="flex-1 px-4 py-3 border rounded font-semibold transition text-left">Build &amp; Execute<span class="block text-xs font-normal mt-0.5">Describe the process, generate a tool chain, run it</span></button>
+      <button id="path-tool-btn" onclick="setPath('tool')" class="flex-1 px-4 py-3 border rounded font-semibold transition text-left">1. Run a single tool<span class="block text-xs font-normal mt-0.5">Pick one MCP tool, fill its parameters, and call it directly.</span></button>
+      <button id="path-workflow-btn" onclick="setPath('workflow')" class="flex-1 px-4 py-3 border rounded font-semibold transition text-left">2. Build a workflow<span class="block text-xs font-normal mt-0.5">Manually chain tool steps and pass outputs between them.</span></button>
+      <button id="path-planner-btn" onclick="setPath('planner')" class="flex-1 px-4 py-3 border rounded font-semibold transition text-left">3. AI planner (LangGraph)<span class="block text-xs font-normal mt-0.5">Describe a goal in plain English; the LLM plans, validates, and executes a workflow.</span></button>
     </div>
 
     <!-- Path: run a tool -->
@@ -97,18 +99,19 @@
 
     <!-- Path: build a workflow -->
     <div id="path-workflow" class="hidden">
-      <div class="mb-4 p-4 border rounded bg-white">
-        <h3 class="font-semibold mb-2">2. Describe what the process should do</h3>
-        <textarea id="goal" rows="2" class="w-full border rounded p-2" placeholder="e.g. Search for the company, scrape the top result, and extract the leadership team"></textarea>
-        <div class="mt-2 flex items-center gap-2">
-          <button id="gen-btn" onclick="generateWorkflow()" class="bg-violet-600 text-white px-4 py-2 rounded" disabled>Generate steps</button>
-          <span id="gen-hint" class="text-sm text-slate-500">Connect first to load available tools.</span>
-        </div>
+      <div class="mb-4 p-4 border-2 border-violet-200 rounded-lg bg-violet-50 shadow-sm ring-1 ring-violet-100">
+        <h3 class="text-lg font-bold text-violet-900 mb-2 flex items-center gap-2">
+          <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-violet-600 text-white text-xs font-bold">2</span>
+          Build a workflow
+        </h3>
+        <p class="text-sm text-slate-700">
+          Manually assemble a chain of MCP tool steps. Switch to the <strong>AI planner</strong> tab if you want to describe a goal in plain English instead.
+        </p>
       </div>
 
       <div class="mb-4 p-4 border rounded bg-white">
         <div class="flex items-center justify-between mb-2">
-          <h3 class="font-semibold">3. Workflow steps</h3>
+          <h3 class="font-semibold">Workflow steps</h3>
           <div class="flex items-center gap-2">
             <label class="text-sm text-slate-600 flex items-center gap-1"><input id="stop-on-error" type="checkbox" checked /> Stop on error</label>
             <button onclick="saveWorkflow()" class="bg-slate-500 text-white px-3 py-1 rounded text-sm">Save JSON</button>
@@ -117,7 +120,26 @@
           </div>
         </div>
         <p class="text-xs text-slate-500 mb-2">Arguments are JSON. Use <span class="font-mono">{{lastData.&lt;path&gt;}}</span> to reference fields from a previous step's result (e.g. <span class="font-mono">{{lastData.url}}</span>).</p>
-        <div id="workflow-steps" class="text-sm text-slate-500">No steps yet. Generate from a goal above, or add a tool from the Run a tool path.</div>
+        <div id="workflow-steps" class="text-sm text-slate-500">No steps yet. Add a tool from the "Run a single tool" tab.</div>
+      </div>
+    </div>
+
+    <!-- Path: LangGraph planner -->
+    <div id="path-planner" class="hidden">
+      <div class="mb-4 p-4 border-2 border-indigo-200 rounded-lg bg-indigo-50 shadow-sm ring-1 ring-indigo-100">
+        <h3 class="text-lg font-bold text-indigo-900 mb-2 flex items-center gap-2">
+          <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-indigo-600 text-white text-xs font-bold">2</span>
+          Natural-language goal
+        </h3>
+        <textarea id="planner-goal" rows="3" class="w-full border-2 border-indigo-300 rounded-lg p-3 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition" placeholder="e.g. Search for Python news, open the top result, and summarize it"></textarea>
+        <div class="mt-3 flex items-center gap-3">
+          <button onclick="plannerPlan()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-5 py-2.5 rounded-lg shadow-sm transition">Plan</button>
+          <button onclick="plannerRun()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-5 py-2.5 rounded-lg shadow-sm transition">Plan &amp; run</button>
+        </div>
+      </div>
+      <div class="mb-4 p-4 border rounded bg-white">
+        <h3 class="font-semibold mb-2">Generated plan</h3>
+        <pre id="planner-plan" class="text-xs bg-slate-50 p-2 rounded overflow-auto max-h-60 text-slate-700">No plan yet.</pre>
       </div>
     </div>
 
@@ -331,7 +353,11 @@
       return h.replace(/\u0000(\d+)\u0000/g, (m, k) => anchors[+k]);
     }
 
-    function setOut(text) { $('out').innerHTML = linkify(text); }
+    function setOut(text) {
+      // Linkify only the status/message portion; leave JSON payloads as plain text.
+      const idx = text.search(/^\s*[\{\[]/m);
+      $('out').innerHTML = idx === -1 ? linkify(text) : linkify(text.slice(0, idx)) + esc(text.slice(idx));
+    }
 
     function updateMcpContext(ctx, data) {
       const content = data?.result?.content;
@@ -344,6 +370,7 @@
         if (parsed.success && Array.isArray(parsed.data) && parsed.data.length) ctx.lastData = parsed.data[0];
         else if (parsed.success && parsed.data && typeof parsed.data === 'object') ctx.lastData = parsed.data;
         else if (parsed.markdown) ctx.lastData = parsed;
+        else if (parsed.success && Array.isArray(parsed.links)) ctx.lastData = parsed;
         else if (parsed.data && typeof parsed.data === 'object') ctx.lastData = parsed.data;
       }
     }
@@ -383,10 +410,12 @@
       currentPath = p;
       $('path-tool').classList.toggle('hidden', p !== 'tool');
       $('path-workflow').classList.toggle('hidden', p !== 'workflow');
+      $('path-planner').classList.toggle('hidden', p !== 'planner');
       const on = 'bg-blue-600 text-white border-blue-600';
       const off = 'bg-white text-slate-700 hover:bg-blue-50';
       $('path-tool-btn').className = `flex-1 px-4 py-3 border rounded font-semibold transition text-left ${p === 'tool' ? on : off}`;
       $('path-workflow-btn').className = `flex-1 px-4 py-3 border rounded font-semibold transition text-left ${p === 'workflow' ? on : off}`;
+      $('path-planner-btn').className = `flex-1 px-4 py-3 border rounded font-semibold transition text-left ${p === 'planner' ? on : off}`;
     }
 
     // ---- Connect ----
@@ -622,6 +651,10 @@
             <button onclick="delStep(${i})" class="px-2 text-red-500 hover:text-red-700" title="Delete">&#10005;</button>
           </div>
           <textarea id="step-args-${i}" rows="${Math.min(6, (s.argsText || '').split('\n').length + 1)}" class="w-full border rounded p-1 font-mono text-xs">${esc(s.argsText || '{}')}</textarea>
+          <div class="flex items-center gap-2 mt-1">
+            <span class="text-xs text-slate-500 whitespace-nowrap">for each</span>
+            <input type="text" value="${esc(s.forEach || '')}" placeholder="{{lastData.links}} — repeat step per item; use {{item.url}} and {{index}} in args" onchange="workflow[${i}].forEach=this.value" class="flex-1 border rounded px-2 py-0.5 font-mono text-xs text-slate-600" />
+          </div>
         </div>`).join('');
     }
 
@@ -651,6 +684,7 @@
         let args;
         try { args = JSON.parse(s.argsText || '{}'); } catch { args = s.argsText; }
         const step = { tool: s.tool, arguments: args };
+        if (s.forEach) step.for_each = s.forEach;
         if (s.note) step.note = s.note;
         return step;
       });
@@ -674,8 +708,8 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...(GATEWAY_API_KEY ? { 'Authorization': 'Bearer ' + GATEWAY_API_KEY } : {}) },
           body: JSON.stringify({
-            content: `Goal: ${goal}\n\nAvailable MCP tools (invoked via tools/call):\n${toolDocs}\n\nReturn a JSON array of steps. Each step: { "tool": "<tool name>", "arguments": { ... }, "note": "why" }. Use {{lastData.<path>}} to reference fields from a previous step's result (e.g. {{lastData.url}}, {{lastData.markdown}}).`,
-            schema: { type: 'array', items: { type: 'object', properties: { tool: { type: 'string' }, arguments: { type: 'object' }, note: { type: 'string' } }, required: ['tool'] } },
+            content: `Goal: ${goal}\n\nAvailable MCP tools (invoked via tools/call):\n${toolDocs}\n\nReturn a JSON array of steps. Each step: { "tool": "<tool name>", "arguments": { ... }, "for_each": "optional array path", "note": "why" }.\n\nRules:\n1. Break the goal into discrete steps — one tool call per distinct operation.\n2. Use {{lastData.<path>}} to reference fields from the previous step's result.\n3. To repeat a step for every element of an array, add for_each as a top-level step field (not inside arguments). Inside that step, the URL/text argument must reference {{item.<field>}}, NOT {{lastData.<field>}} (e.g. for_each {{lastData.links}} with "url": "{{item.url}}").\n4. If the goal asks to interpret, summarize, analyze, or extract information from pages, include an extract or interpret step that consumes the previous step's markdown or structured data.\n\nExample plan for "find and summarize all storm alerts on nhc.noaa.gov":\n1. { "tool": "scrape", "arguments": { "url": "https://www.nhc.noaa.gov/" }, "note": "get homepage with alert links" }\n2. { "tool": "extract", "arguments": { "schema": { "type": "object", "properties": { "alerts": { "type": "array", "items": { "type": "object", "properties": { "title": { "type": "string" }, "url": { "type": "string" } } } } } }, "instruction": "Extract the title and URL of each Atlantic storm alert/advisory/tropical-weather-outlook link.", "content": "{{lastData.markdown}}" }, "note": "parse alert links from homepage" }\n3. { "tool": "scrape", "for_each": "{{lastData.alerts}}", "arguments": { "url": "{{item.url}}" }, "note": "scrape each alert page" }\n4. { "tool": "interpret", "arguments": { "question": "Summarize all the storm alerts and their key details.", "content": "{{lastData}}" }, "note": "summarize the collected alert pages" }`,
+            schema: { type: 'array', items: { type: 'object', properties: { tool: { type: 'string' }, arguments: { type: 'object' }, for_each: { type: 'string' }, note: { type: 'string' } }, required: ['tool'] } },
             instruction: 'Return only the JSON array of steps.',
             max_retries: 1
           })
@@ -685,12 +719,45 @@
         const steps = data.data || data;
         if (!Array.isArray(steps)) { setOut('Planner did not return an array:\n' + JSON.stringify(data, null, 2)); return; }
         syncArgs();
-        workflow = steps.map(s => ({ tool: s.tool, note: s.note || '', argsText: JSON.stringify(s.arguments || {}, null, 2) }));
+        workflow = steps.map(s => {
+          const args = { ...(s.arguments || {}) };
+          let forEach = s.for_each || s.forEach || args.for_each || '';
+          delete args.for_each;
+          // Auto-fix common planner mistake: using {{lastData.<field>}} in a for_each step
+          // when it should reference {{item.<field>}} (e.g. {{lastData.url}} -> {{item.url}}).
+          let fixed = false;
+          if (forEach) {
+            Object.keys(args).forEach(k => {
+              if (typeof args[k] === 'string') {
+                const next = args[k].replace(/\{\{\s*lastData\.(url|markdown|title|text|content)\s*\}\}/g, '{{item.$1}}');
+                if (next !== args[k]) { args[k] = next; fixed = true; }
+              }
+            });
+          }
+          return { tool: s.tool, note: s.note || '', forEach, argsText: JSON.stringify(args, null, 2), _fixed: fixed };
+        });
         renderWorkflow();
-        setOut(`Generated ${workflow.length} steps. Review and edit, then run.`);
+        const warnings = [];
+        workflow.forEach((s, i) => {
+          const usesItem = /\{\{\s*item(\.|\})/.test(s.argsText);
+          const usesLast = /\{\{\s*lastData\./.test(s.argsText);
+          if (usesItem && !s.forEach) warnings.push(`step ${i + 1} uses {{item}} but has no for_each — set one or fix the args`);
+          if (s.forEach && !usesItem) warnings.push(`step ${i + 1} has for_each but args never use {{item}}`);
+          if (s.forEach && usesLast) warnings.push(`step ${i + 1} has for_each but still uses {{lastData.*}} — it should use {{item.*}}`);
+        });
+        const fixed = workflow.filter(s => s._fixed).length;
+        workflow.forEach(s => delete s._fixed);
+        setOut(`Generated ${workflow.length} steps${fixed ? ` (auto-corrected ${fixed} placeholder${fixed === 1 ? '' : 's'})` : ''}. Review and edit, then run.` + (warnings.length ? `\n\nWarnings:\n- ${warnings.join('\n- ')}` : ''));
       } catch (e) {
         setOut(`Error: ${e.message}`);
       }
+    }
+
+    const MAX_FOREACH_ITEMS = 50;
+
+    function resolveForEach(expr, ctx) {
+      const m = expr.trim().match(/^\{\{(.+)\}\}$/);
+      return getByPath(ctx, (m ? m[1] : expr).trim());
     }
 
     async function runWorkflow() {
@@ -706,26 +773,103 @@
           let args;
           try { args = JSON.parse(step.argsText || '{}'); }
           catch (e) { setOut(`Step ${i + 1} (${step.tool}): invalid JSON arguments — ${e.message}`); return; }
-          args = subPlaceholders(args, ctx);
-          const unresolved = JSON.stringify(args).match(/\{\{[^}]+\}\}/);
-          if (unresolved) {
-            setOut(`Step ${i + 1} (${step.tool}): unresolved placeholder ${unresolved[0]} — a previous step did not produce that field.\n\n` + JSON.stringify(results, null, 2));
-            return;
+
+          // for_each is a step-level field; promote it if mistakenly placed inside arguments
+          let forEach = (step.forEach || '').trim();
+          if (!forEach && typeof args.for_each === 'string') forEach = args.for_each;
+          delete args.for_each;
+
+          let items = null;
+          if (forEach) {
+            items = resolveForEach(forEach, ctx);
+            if (!Array.isArray(items)) {
+              setOut(`Step ${i + 1} (${step.tool}): for_each path "${forEach}" did not resolve to an array.\n\n` + JSON.stringify(results, null, 2));
+              return;
+            }
+            if (!items.length) {
+              results.push({ step: i + 1, tool: step.tool, forEach, items: 0, note: 'skipped — empty array' });
+              continue;
+            }
+            if (items.length > MAX_FOREACH_ITEMS) items = items.slice(0, MAX_FOREACH_ITEMS);
           }
-          const res = await callMcpRaw({ jsonrpc: '2.0', id: i + 1, method: 'tools/call', params: { name: step.tool, arguments: args } }, mcpSessionId);
-          const data = extractMcpResult(res.text);
-          const isErr = res.status !== 200 || data?.result?.isError === true || !!data?.error;
-          results.push({ step: i + 1, tool: step.tool, arguments: args, status: res.status, error: isErr || undefined, data });
-          updateMcpContext(ctx, data);
-          setOut(`Step ${i + 1}/${workflow.length} ${isErr ? 'FAILED' : 'done'} (${step.tool})\n\n` + JSON.stringify(results, null, 2));
-          if (isErr && $('stop-on-error').checked) {
-            setOut(`Stopped at step ${i + 1} (${step.tool}) — error.\n\n` + JSON.stringify(results, null, 2));
-            return;
+          const iterations = items ? items.length : 1;
+          const collected = [];
+
+          for (let k = 0; k < iterations; k++) {
+            const label = items ? `Step ${i + 1}.${k + 1}` : `Step ${i + 1}`;
+            const callCtx = items ? { ...ctx, item: items[k], index: k } : ctx;
+            const callArgs = subPlaceholders(args, callCtx);
+            const unresolved = JSON.stringify(callArgs).match(/\{\{[^}]+\}\}/);
+            if (unresolved) {
+              const ph = unresolved[0];
+              const hint = /\{\{\s*(item|index)(\.|\})/.test(ph) && !items
+                ? ` — this step uses ${ph} but has no for_each. Set its for_each field to an array path (e.g. {{lastData.links}}).`
+                : ` — a previous step did not produce that field.`;
+              setOut(`${label} (${step.tool}): unresolved placeholder ${ph}${hint}\n\n` + JSON.stringify(results, null, 2));
+              return;
+            }
+            const res = await callMcpRaw({ jsonrpc: '2.0', id: i + 1, method: 'tools/call', params: { name: step.tool, arguments: callArgs } }, mcpSessionId);
+            const data = extractMcpResult(res.text);
+            const isErr = res.status !== 200 || data?.result?.isError === true || !!data?.error;
+            const rec = { step: i + 1, tool: step.tool, arguments: callArgs, status: res.status, error: isErr || undefined, data };
+            if (items) { rec.item = k; rec.forEach = step.forEach; }
+            results.push(rec);
+            updateMcpContext(ctx, data);
+            if (items) collected.push(ctx.lastData);
+            setOut(`${label}/${workflow.length} ${isErr ? 'FAILED' : 'done'} (${step.tool})\n\n` + JSON.stringify(results, null, 2));
+            if (isErr && $('stop-on-error').checked) {
+              setOut(`Stopped at ${label} (${step.tool}) — error.\n\n` + JSON.stringify(results, null, 2));
+              return;
+            }
           }
+          // After a for_each step, expose all per-item results as an array so later
+          // steps can iterate them with for_each {{lastData}} and {{item.<field>}}.
+          if (items) ctx.lastData = collected;
         }
         setOut('Workflow complete.\n\n' + JSON.stringify(results, null, 2));
       } catch (e) {
         setOut(`Error at step ${results.length + 1}: ${e.message}\n\n` + JSON.stringify(results, null, 2));
+      }
+    }
+
+    // ---- LangGraph planner ----
+
+    async function plannerPlan() {
+      const goal = $('planner-goal').value.trim();
+      if (!goal) { setOut('Enter a goal first.'); return; }
+      setOut('Planning with LangGraph...');
+      try {
+        const res = await fetch(url('/v1/workflow/plan'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ goal })
+        });
+        const data = await res.json();
+        if (!res.ok) { setOut(`HTTP ${res.status}\n\n${JSON.stringify(data, null, 2)}`); return; }
+        $('planner-plan').textContent = JSON.stringify(data.plan, null, 2);
+        const warnings = data.validation_errors?.length ? `\n\nWarnings:\n- ${data.validation_errors.map(e => `${e.step ? `step ${e.step}: ` : ''}${e.message}`).join('\n- ')}` : '';
+        setOut(`Generated ${data.plan?.steps?.length || 0} steps${warnings}`);
+      } catch (e) {
+        setOut(`Error: ${e.message}`);
+      }
+    }
+
+    async function plannerRun() {
+      const goal = $('planner-goal').value.trim();
+      if (!goal) { setOut('Enter a goal first.'); return; }
+      setOut('Planning and executing with LangGraph...');
+      try {
+        const res = await fetch(url('/v1/workflow/run'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ goal })
+        });
+        const data = await res.json();
+        if (!res.ok) { setOut(`HTTP ${res.status}\n\n${JSON.stringify(data, null, 2)}`); return; }
+        $('planner-plan').textContent = JSON.stringify(data.plan, null, 2);
+        setOut(`Status: ${data.status}\nFinal output: ${data.final_answer}\n\n${JSON.stringify(data, null, 2)}`);
+      } catch (e) {
+        setOut(`Error: ${e.message}`);
       }
     }
 
@@ -757,7 +901,7 @@
       selectedBrand = { name: BRAND_LIST[i][0], url: BRAND_LIST[i][1] };
       renderBrands();
       if (openTool < 0) {
-        $('brand-selected').textContent = `${selectedBrand.name} selected — open a tool in "Run a tool" to apply it.`;
+        $('brand-selected').textContent = `${selectedBrand.name} selected — open a tool in "Run a single tool" to apply it.`;
         return;
       }
       $('brand-selected').textContent = `${selectedBrand.name} — ${selectedBrand.url}`;
@@ -792,7 +936,7 @@
         container.innerHTML = '<span class="text-red-600">Health check failed</span>';
       }
     }
-    setInterval(pollHealth, 5000);
+    setInterval(pollHealth, 15000);
     setPath('tool');
     renderBrands();
     pollHealth();

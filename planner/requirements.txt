@@ -1,0 +1,8 @@
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+httpx==0.28.1
+pydantic==2.13.5
+jsonschema==4.26.0
+python-json-logger==3.3.0
+langgraph==0.2.56
+langchain-core==0.3.25
